@@ -428,12 +428,25 @@ APPROVED BENCHMARK 001 CONTEXT
     const proposal = await callVision(`
 Return SplashCAD's editable outer glass polygon and all visible electrical faceplates in one pass.
 
-Outline: follow the rear worktop/wall junction, real cabinet undersides and extractor
-rise. Ignore worktop fronts, doors, handles, appliances, shadows, reflections, black
-margins and image borders. Use only genuine direction changes; keep shoulders and
-rises rectilinear. Return clockwise normalized coordinates beginning bottom-left.
+Outline: detect ONLY the MAIN FRONT-FACING REAR WALL PLANE that will receive the glass.
+Follow the rear worktop/wall junction, real cabinet undersides and extractor rise.
 
-Faceplates: detect the tight OUTER rectangle of every visible electrical faceplate.
+CRITICAL WALL-PLANE RULES
+- First identify the LEFT and RIGHT vertical junctions where the main rear wall turns away into a side/return wall.
+- Those two junctions are HARD LIMITS of this splashback piece.
+- NEVER continue the polygon around a left or right return wall.
+- NEVER use a socket, cabinet, worktop edge or feature located on a side-return wall to extend the main-wall outline.
+- Perspective must not make the outline follow the return wall.
+- At each side, stop exactly on the visible wall-turn/junction line.
+- The bottom edge follows ONLY the rear worktop-to-main-wall junction between those limits.
+- The top edge follows ONLY cabinet undersides/extractor geometry on that same front-facing wall plane.
+- Prefer the dominant broad wall plane facing the camera, not narrower angled surfaces at either side.
+- Ignore worktop fronts, doors, handles, appliances, shadows, reflections, black margins and image borders.
+- Use only genuine direction changes; keep shoulders and rises rectilinear.
+- Return clockwise normalized coordinates beginning bottom-left.
+
+Faceplates: detect the tight OUTER rectangle of every visible electrical faceplate ON THAT SAME MAIN FRONT-FACING WALL ONLY.
+Ignore every electrical fitting on a left or right side-return wall, even if clearly visible.
 One physical plate is one detection. Classify single, double, cooker or switch;
 portrait cooker switches are valid. Ignore internal holes, handles, appliances and
 notches. Return normalized centre, width, height, orientation and confidence.
