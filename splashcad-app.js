@@ -601,6 +601,41 @@
 
       const rect = overlay.getBoundingClientRect();
       pushHistory();
+
+      // NEW SCAN = NEW MEASUREMENT GEOMETRY.
+      // Only reset here, AFTER the AI has successfully returned a usable scan.
+      // Manual editing of this same scan must NOT clear entered measurements.
+      state.productionMeasurements={
+        overallWidth:null,
+        offSquareOverallWidth:null,
+        stations:[],
+        heights:[]
+      };
+      state.productionAdjustedMeasurements={
+        widths:[],
+        heights:[],
+        overallWidth:null,
+        offSquareOverallWidth:null
+      };
+      state.productionSocketSizes=[];
+      state.productionModificationsApplied=false;
+      state.measuredVertices=null;
+
+      // These belong to the previous scanned outline and must not migrate
+      // onto a different wall/photo geometry.
+      state.manualWidthPoints=[];
+      state.manualHeightPoints=[];
+      state.notches=[];
+      state.offSquareHeightSections=[];
+      state.offSquareSquareCorner=null;
+      state.squareCornerIndex=null;
+      state.cornerRadii={};
+      state.shoulderNotchesEnabled=false;
+
+      if($("prodOverallWidth")) $("prodOverallWidth").value="";
+      if($("prodOffSquareOverallWidth")) $("prodOffSquareOverallWidth").value="";
+      if($("shoulderNotchesButton")) $("shoulderNotchesButton").textContent="Shoulder notches: No";
+
       const cleanedPoints = cleanDetectedPolygon(result.points);
       state.originalAiPoints = cleanedPoints.map((point) => ({
         x: Number(point.x),
