@@ -832,6 +832,7 @@
   const loadPhotoFile = async (file) => {
     if (!file) return;
     try {
+      let imageDataUrl = await fileToDataUrl(file);
       if (isHeicFile(file)) {
         setStatus($("edgeDetectionStatus"), "Preparing photoó.");
         let decodedLocally = false;
