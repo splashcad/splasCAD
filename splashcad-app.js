@@ -2762,16 +2762,12 @@
     // Field geometry rule: the edited outline is authoritative.
     // Applying dimensions annotates/calculates from that outline; it must never
     // silently replace the surveyor's edited shape with a second perimeter.
+    // LOCKED FIELD GEOMETRY RULE:
+    // What the surveyor sees and edits in cyan is EXACTLY what the measured
+    // drawing uses. Measurements annotate this geometry; they never rebuild it.
     const scannedVertices = scaledPoints();
-
-    // Scan determines WHAT the shape is.
-    // Measurements determine HOW LARGE every part of that shape is.
-    const enteredVertices = buildMeasurementDrivenPerimeter(productionOnly);
-
-    const vertices = enteredVertices ||
-      perimeterWithSurveyNotches(scannedVertices);
-
-    const usingMeasuredProductionPerimeter = !!enteredVertices;
+    const vertices = scannedVertices.map(point=>({...point}));
+    const usingMeasuredProductionPerimeter = false;
 
     if (vertices.length < 3) {
       setStatus($("drawingStatus"), "Select at least three corners first.");
