@@ -2452,75 +2452,26 @@
     const p = vertices.map(map);
     drawingCtx.moveTo(p[0].x, p[0].y);
 
-    const usingMeasuredProductionPerimeter = Boolean(enteredVertices?.length>=3);
-    if(usingMeasuredProductionPerimeter){
-      for(let i=1;i<p.length;i++) drawingCtx.lineTo(p[i].x,p[i].y);
-      drawingCtx.closePath();
-      // Always set the measured perimeter colour explicitly. Without this, the
-      // narrow shoulder-notch segments can inherit the previous green datum style.
-      drawingCtx.fillStyle = "#ffffff";
-      drawingCtx.strokeStyle = productionOnly ? "#2563eb" : "#b91c1c";
-      drawingCtx.lineWidth = 4;
+    // FIELD DRAWING RULE:
+    // The edited cyan photo outline is the authoritative perimeter.
+    // Never reinterpret it as the old fixed 8-point Benchmark topology.
+    // Every outline point is drawn in exactly the same order as the editor.
+    drawingCtx.beginPath();
+    drawingCtx.moveTo(p[0].x,p[0].y);
+
+    for(let i=1;i<p.length;i++){
+      drawingCtx.lineTo(p[i].x,p[i].y);
     }
 
-    else {
-    // 1 -> 2 -> 3
-    drawingCtx.lineTo(p[1].x, p[1].y);
-    drawingCtx.lineTo(p[2].x, p[2].y);
+    if(state.closed) drawingCtx.closePath();
 
-    if (state.shoulderNotchesEnabled && vertices.length >= 8) {
-      // RIGHT SHOULDER NOTCH at point 4 (index 3).
-      // Travel left along shoulder from point 3, stop before point 4,
-      // drop into glass, move to point-4 x, rise back to shoulder,
-      // then continue vertically up the extractor side.
-      const notchW = 18;
-      const notchD = 16;
-
-      const rightShoulderY = p[3].y;
-      const rightApproachX = p[3].x + notchW;
-
-      drawingCtx.lineTo(rightApproachX, rightShoulderY);
-      drawingCtx.lineTo(rightApproachX, rightShoulderY + notchD);
-      drawingCtx.lineTo(p[3].x, rightShoulderY + notchD);
-      drawingCtx.lineTo(p[3].x, rightShoulderY);
-    } else {
-      drawingCtx.lineTo(p[3].x, p[3].y);
-    }
-
-    // 4 -> 5 -> 6
-    drawingCtx.lineTo(p[4].x, p[4].y);
-    drawingCtx.lineTo(p[5].x, p[5].y);
-
-    if (state.shoulderNotchesEnabled && vertices.length >= 8) {
-      // LEFT SHOULDER NOTCH at point 7 (index 6).
-      // Travel down extractor side to point 7, drop into glass,
-      // move left, rise to shoulder, then continue left to point 8.
-      const notchW = 18;
-      const notchD = 16;
-
-      const leftShoulderY = p[6].y;
-
-      drawingCtx.lineTo(p[6].x, leftShoulderY);
-      drawingCtx.lineTo(p[6].x, leftShoulderY + notchD);
-      drawingCtx.lineTo(p[6].x - notchW, leftShoulderY + notchD);
-      drawingCtx.lineTo(p[6].x - notchW, leftShoulderY);
-    } else {
-      drawingCtx.lineTo(p[6].x, p[6].y);
-    }
-
-    // 7 -> 8 -> 1
-    drawingCtx.lineTo(p[7].x, p[7].y);
-    if (state.closed) drawingCtx.closePath();
-
-    if (state.closed) {
-      drawingCtx.fillStyle = "#dbeafe";
+    if(state.closed){
+      drawingCtx.fillStyle=productionOnly ? "#eff6ff" : "#dbeafe";
       drawingCtx.fill();
     }
 
-    drawingCtx.strokeStyle = "#0f172a";
-    drawingCtx.lineWidth = 4;
-    }
-
+    drawingCtx.strokeStyle=productionOnly ? "#2563eb" : "#0f172a";
+    drawingCtx.lineWidth=4;
     drawingCtx.stroke();
 
     // Alpha 6.0.8 — optional real corner radii on measured/production drawings.
