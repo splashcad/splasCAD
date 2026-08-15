@@ -8,6 +8,7 @@
     "check": "node --check server.js && node --check splashcad-app.js"
   },
   "dependencies": {
-    "heic-convert": "^2.1.0"
+    "heic-convert": "^2.1.0",
+    "heic2any": "^0.0.4"
   }
 }

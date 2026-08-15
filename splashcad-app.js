@@ -834,29 +834,23 @@
     try {
       let imageDataUrl = await fileToDataUrl(file);
       if (isHeicFile(file)) {
-        setStatus($("edgeDetectionStatus"), "Preparing photoó.");
-        let decodedLocally = false;
-        try {
-          const bitmap = await createImageBitmap(file);
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          const ctx = canvas.getContext("2d", { alpha: false });
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close?.();
-          imageDataUrl = canvas.toDataURL("image/jpeg", 0.92);
-          decodedLocally = imageDataUrl.startsWith("data:image/jpeg");
-        } catch {}
-        if (!decodedLocally) {
-          setStatus($("edgeDetectionStatus"), "Converting HEIC photoó.");
-          const response = await fetch("/api/convert-heic", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageDataUrl })
-          });
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok || !data.imageDataUrl) throw new Error(data.error || ("HEIC conversion failed (" + response.status + ")."));
-          imageDataUrl = data.imageDataUrl;
+        setStatus($("edgeDetectionStatus"), "Converting HEIC locally…");
+
+        if (typeof heic2any !== "function") {
+          throw new Error("Local HEIC converter did not load.");
+        }
+
+        const converted = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.9
+        });
+
+        const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+        imageDataUrl = await fileToDataUrl(jpegBlob);
+
+        if (!imageDataUrl.startsWith("data:image/jpeg")) {
+          throw new Error("Local HEIC conversion did not produce JPEG.");
         }
       }
       state.photoDataUrl = imageDataUrl;
