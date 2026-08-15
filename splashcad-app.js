@@ -446,6 +446,44 @@
     return points;
   };
 
+  const orthogonaliseFieldOutline = (source) => {
+    if(!Array.isArray(source) || source.length<3) return source||[];
+
+    let points=source.map(p=>({...p}));
+
+    // Field scan geometry:
+    // preserve every AI-detected physical corner and its order.
+    // Only remove photographic perspective from runs that are already
+    // recognisably horizontal or vertical.
+    for(let pass=0;pass<3;pass++){
+      const next=points.map(p=>({...p}));
+
+      for(let i=0;i<points.length;i++){
+        const j=(i+1)%points.length;
+        const a=points[i], b=points[j];
+        const dx=Math.abs(Number(b.x)-Number(a.x));
+        const dy=Math.abs(Number(b.y)-Number(a.y));
+
+        // Strongly horizontal physical run.
+        if(dx>0.035 && dy/dx<0.32){
+          const y=(Number(a.y)+Number(b.y))/2;
+          next[i].y=y;
+          next[j].y=y;
+        }
+        // Strongly vertical physical run.
+        else if(dy>0.035 && dx/dy<0.32){
+          const x=(Number(a.x)+Number(b.x))/2;
+          next[i].x=x;
+          next[j].x=x;
+        }
+      }
+
+      points=next;
+    }
+
+    return points;
+  };
+
   const analyseEdgeBands = () => {
     const rect = overlay.getBoundingClientRect();
     const width = Math.max(320, Math.round(rect.width));
@@ -636,7 +674,12 @@
       if($("prodOffSquareOverallWidth")) $("prodOffSquareOverallWidth").value="";
       if($("shoulderNotchesButton")) $("shoulderNotchesButton").textContent="Shoulder notches: No";
 
-      const cleanedPoints = cleanDetectedPolygon(result.points);
+      // AI decides WHAT physical corners exist.
+      // This stage removes camera perspective from obvious cabinet/worktop
+      // horizontals and vertical wall transitions without changing topology.
+      const cleanedPoints = orthogonaliseFieldOutline(
+        cleanDetectedPolygon(result.points)
+      );
       state.originalAiPoints = cleanedPoints.map((point) => ({
         x: Number(point.x),
         y: Number(point.y)
