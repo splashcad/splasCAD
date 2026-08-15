@@ -1786,8 +1786,8 @@
           x:centre,
           y:runY,
           outerSide:
-            left<=minX+edgeTol && right<maxX-edgeTol ? "left" :
-            right>=maxX-edgeTol && left>minX+edgeTol ? "right" :
+            left<=minX+edgeTol ? "left" :
+            right>=maxX-edgeTol ? "right" :
             null
         });
       }
@@ -1795,13 +1795,16 @@
 
     // Remove only truly duplicate representations of the SAME physical run.
     // Do not collapse different main areas just because their heights are equal.
+    // FIELD RULE:
+    // A genuine physical run is never removed just because another run is
+    // close to it or happens to have the same height.
+    // Only the exact SAME outline segment may be duplicated.
     const uniqueMain=[];
     mainRuns
       .sort((a,b)=>Number(a.x)-Number(b.x))
       .forEach(run=>{
         const duplicate=uniqueMain.some(existing=>
-          Math.abs(Number(existing.x)-Number(run.x))<8 &&
-          Math.abs(Number(existing.y)-Number(run.y))<8
+          Number(existing.segmentIndex)===Number(run.segmentIndex)
         );
         if(!duplicate) uniqueMain.push(run);
       });
