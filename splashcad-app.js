@@ -1223,41 +1223,33 @@
   overlay.addEventListener("pointercancel", endDrag);
 
   const scaledPoints = () => {
-    if (state.points.length < 3) return [];
+    if(state.points.length < 3) return [];
 
-    // LOCKED FIELD RULE:
-    // The edited cyan outline is authoritative.
-    // NEVER reinterpret an outline because it happens to contain 8 points.
-    // NEVER replace it with the old Benchmark/full-hob topology.
     const sourcePoints=state.points.map(point=>({
       ...point,
       x:Number(point.x),
       y:Number(point.y)
     }));
 
-    if (Number.isFinite(state.mmPerPixel) && state.mmPerPixel > 0) {
-      const origin = sourcePoints[0];
-
-      return sourcePoints.map(point => ({
-        x: (point.x-origin.x)*state.mmPerPixel,
-        y: (origin.y-point.y)*state.mmPerPixel
+    // If genuinely calibrated, use the real uniform mm scale.
+    if(Number.isFinite(state.mmPerPixel) && state.mmPerPixel>0){
+      const origin=sourcePoints[0];
+      return sourcePoints.map(point=>({
+        x:(point.x-origin.x)*state.mmPerPixel,
+        y:(origin.y-point.y)*state.mmPerPixel
       }));
     }
 
-    const xs=sourcePoints.map(point=>point.x);
-    const ys=sourcePoints.map(point=>point.y);
-
-    const minX=Math.min(...xs);
-    const maxX=Math.max(...xs);
-    const minY=Math.min(...ys);
-    const maxY=Math.max(...ys);
-
-    const width=Number($("widthInput")?.value)||1;
-    const height=Number($("heightInput")?.value)||1;
+    // FIELD RULE:
+    // Before calibration/measurements, preserve the edited cyan scan EXACTLY.
+    // One screen pixel in X equals one screen pixel in Y.
+    // renderDrawing() will uniformly fit this geometry to the drawing canvas.
+    const minX=Math.min(...sourcePoints.map(p=>p.x));
+    const maxY=Math.max(...sourcePoints.map(p=>p.y));
 
     return sourcePoints.map(point=>({
-      x:((point.x-minX)/(maxX-minX||1))*width,
-      y:((maxY-point.y)/(maxY-minY||1))*height
+      x:point.x-minX,
+      y:maxY-point.y
     }));
   };
 
@@ -1291,43 +1283,42 @@
 
 
   const scaledSocket = (socket, vertices) => {
-    if (Number.isFinite(state.mmPerPixel) && state.mmPerPixel > 0 && state.points.length) {
-      const origin = state.points[0];
+    if(!state.points.length) return {x:0,y:0};
+
+    if(Number.isFinite(state.mmPerPixel) && state.mmPerPixel>0){
+      const origin=state.points[0];
       return {
-        x: (socket.x - origin.x) * state.mmPerPixel,
-        y: (origin.y - socket.y) * state.mmPerPixel
+        x:(Number(socket.x)-Number(origin.x))*state.mmPerPixel,
+        y:(Number(origin.y)-Number(socket.y))*state.mmPerPixel
       };
     }
 
-    // IMPORTANT: fittings use the exact same outline-bounds transform as the glass.
-    // This keeps a fitting at the same relative position after manual movement.
-    const xs = state.points.map((p) => p.x);
-    const ys = state.points.map((p) => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const width = Number($("widthInput").value) || 1;
-    const height = Number($("heightInput").value) || 1;
+    const minX=Math.min(...state.points.map(p=>Number(p.x)));
+    const maxY=Math.max(...state.points.map(p=>Number(p.y)));
+
     return {
-      x: ((socket.x - minX) / (maxX - minX || 1)) * width,
-      y: ((maxY - socket.y) / (maxY - minY || 1)) * height
+      x:Number(socket.x)-minX,
+      y:maxY-Number(socket.y)
     };
   };
 
   const scaledNotch = (notch) => {
-    if (Number.isFinite(state.mmPerPixel) && state.mmPerPixel > 0 && state.points.length) {
-      const origin = state.points[0];
+    if(!state.points.length) return {x:0,y:0};
+
+    if(Number.isFinite(state.mmPerPixel) && state.mmPerPixel>0){
+      const origin=state.points[0];
       return {
-        x: (notch.x-origin.x)*state.mmPerPixel,
-        y: (origin.y-notch.y)*state.mmPerPixel
+        x:(Number(notch.x)-Number(origin.x))*state.mmPerPixel,
+        y:(Number(origin.y)-Number(notch.y))*state.mmPerPixel
       };
     }
-    const xs=state.points.map(p=>p.x), ys=state.points.map(p=>p.y);
-    const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
-    const width=Number($("widthInput").value)||1;
-    const height=Number($("heightInput").value)||1;
+
+    const minX=Math.min(...state.points.map(p=>Number(p.x)));
+    const maxY=Math.max(...state.points.map(p=>Number(p.y)));
+
     return {
-      x: ((notch.x-minX)/(maxX-minX||1))*width,
-      y: ((maxY-notch.y)/(maxY-minY||1))*height
+      x:Number(notch.x)-minX,
+      y:maxY-Number(notch.y)
     };
   };
 
