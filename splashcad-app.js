@@ -1772,175 +1772,127 @@
 
   const heightMeasurementFeatureMap = () => {
     ensureMeasureIds();
+
     const pts=state.points||[];
-    const outlineRuns=[];
+    const mainRuns=[];
 
     if(pts.length>=3){
       const ys=pts.map(p=>Number(p.y)).filter(Number.isFinite);
+      const xs=pts.map(p=>Number(p.x)).filter(Number.isFinite);
       const bottomY=Math.max(...ys);
-      const outlineXs=pts.map(p=>Number(p.x)).filter(Number.isFinite);
-      const outlineMinX=Math.min(...outlineXs), outlineMaxX=Math.max(...outlineXs);
-      const edgeTol=Math.max(8,(outlineMaxX-outlineMinX)*0.015);
+      const minX=Math.min(...xs);
+      const maxX=Math.max(...xs);
+      const edgeTol=Math.max(8,(maxX-minX)*0.015);
+
+      // MAIN HEIGHT RULE:
+      // Every genuine upper horizontal wall area contributes ONE main height.
+      // Bottom/worktop datum does not.
       for(let i=0;i<pts.length;i++){
         const a=pts[i];
-        let b=pts[(i+1)%pts.length];
-        if(!a||!b || a._manualMeasure) continue;
-        if(b._manualMeasure){
-          let step=2;
-          while(step<pts.length && pts[(i+step)%pts.length]?._manualMeasure) step++;
-          const c=pts[(i+step)%pts.length];
-          if(!c) continue;
-          b=c;
-        }
+        const b=pts[(i+1)%pts.length];
+        if(!a||!b) continue;
+
         const dx=Math.abs(Number(b.x)-Number(a.x));
         const dy=Math.abs(Number(b.y)-Number(a.y));
+
         if(!(dx>0 && dy<=dx*0.18)) continue;
+
         const runY=(Number(a.y)+Number(b.y))/2;
         const bottomTolerance=Math.max(6,dx*0.015);
         if(Math.abs(runY-bottomY)<=bottomTolerance) continue;
+
         const ax=Number(a.x), bx=Number(b.x);
-        const stationX=state.measurementDirection==="rtl"?Math.max(ax,bx):Math.min(ax,bx);
-        const touchesLeft=Math.min(ax,bx)<=outlineMinX+edgeTol;
-        const touchesRight=Math.max(ax,bx)>=outlineMaxX-edgeTol;
-        outlineRuns.push({type:"outline-y",segmentIndex:i,x:stationX,y:runY,
-          outerSide:touchesLeft&&!touchesRight?"left":touchesRight&&!touchesLeft?"right":null});
+        const left=Math.min(ax,bx);
+        const right=Math.max(ax,bx);
+        const centre=(left+right)/2;
+
+        mainRuns.push({
+          type:"outline-y",
+          segmentIndex:i,
+          x:centre,
+          y:runY,
+          outerSide:
+            left<=minX+edgeTol && right<maxX-edgeTol ? "left" :
+            right>=maxX-edgeTol && left>minX+edgeTol ? "right" :
+            null
+        });
       }
     }
 
-    const shoulderInfo=autoShoulderNotchInfo();
-    const shoulderIndexes=new Set(shoulderInfo.map(info=>info.index));
-    const notchEntries=measurementNotchEntries();
-    const shoulders=notchEntries.filter(e=>shoulderIndexes.has(e.index)).sort((a,b)=>Number(a.notch.x)-Number(b.notch.x));
-    const manuals=notchEntries.filter(e=>!shoulderIndexes.has(e.index)).sort((a,b)=>Number(a.notch.x)-Number(b.notch.x));
-    const fittings=(state.sockets||[]).map((socket,index)=>({type:"fitting",socketIndex:index,x:Number(socket.x),y:Number(socket.y)}))
-      .filter(f=>Number.isFinite(f.x)).sort((a,b)=>a.x-b.x);
-    const runsByX=outlineRuns.slice().sort((a,b)=>a.x-b.x);
-
-    // Alpha 6.0.4 — exact approved height workflow for the full-hob topology.
-    // H1 outside datum edge, H2 first fitting, H3 left shoulder-notch bottom,
-    // H4 extractor top, H5 right shoulder-notch bottom, then manual-notch heights,
-    // then remaining fittings, and LAST = opposite outside edge.
-    const raw=[];
-    let leftOuter=runsByX.find(r=>r.outerSide==="left")||runsByX[0]||null;
-    let rightOuter=[...runsByX].reverse().find(r=>r.outerSide==="right")||runsByX[runsByX.length-1]||null;
-    const extractorRun=runsByX.length ? runsByX.reduce((best,r)=>Number(r.y)<Number(best.y)?r:best,runsByX[0]) : null;
-    const fitOrdered=state.measurementDirection==="rtl"?fittings.slice().reverse():fittings.slice();
-    const shoulderOrdered=state.measurementDirection==="rtl"?shoulders.slice().reverse():shoulders.slice();
-    const manualOrdered=state.measurementDirection==="rtl"?manuals.slice().reverse():manuals.slice();
-    if(state.measurementDirection==="rtl") [leftOuter,rightOuter]=[rightOuter,leftOuter];
-
-    if(leftOuter) raw.push(leftOuter);
-    if(fitOrdered.length) raw.push(fitOrdered.shift());
-    if(shoulderOrdered[0]) raw.push({type:"notch",notchIndex:shoulderOrdered[0].index,x:Number(shoulderOrdered[0].notch.x),y:Number(shoulderOrdered[0].notch.y)});
-    if(extractorRun && !raw.includes(extractorRun)) raw.push(extractorRun);
-    if(shoulderOrdered[1]) raw.push({type:"notch",notchIndex:shoulderOrdered[1].index,x:Number(shoulderOrdered[1].notch.x),y:Number(shoulderOrdered[1].notch.y)});
-    manualOrdered.forEach(e=>raw.push({type:"notch",notchIndex:e.index,x:Number(e.notch.x),y:Number(e.notch.y)}));
-    raw.push(...fitOrdered);
-
-    // Field rule: EVERY genuine horizontal top run owns a height from the
-    // worktop/bottom datum. Do not discard an intermediate run simply because
-    // it is not the outer edge or extractor top. This captures, for example,
-    // the separate cabinet-under height over the tap.
-    const alreadyUsedRunIndexes=new Set(
-      raw
-        .filter(f=>f.type==="outline-y")
-        .map(f=>f.segmentIndex)
-    );
-
-    const remainingRuns=runsByX
-      .filter(run=>
-        run!==rightOuter &&
-        !alreadyUsedRunIndexes.has(run.segmentIndex)
-      )
-      .sort((a,b)=>Number(a.x)-Number(b.x));
-
-    if(state.measurementDirection==="rtl") remainingRuns.reverse();
-
-    raw.push(...remainingRuns);
-
-    if(rightOuter && rightOuter!==leftOuter && rightOuter!==extractorRun) raw.push(rightOuter);
-
-    // Dynamic field rule:
-    // automatic shoulder notches contribute only their real measured height.
-    // Do not manufacture extra height rows to reach a fixed count.
-    // Every splashback derives its measurement count from its actual geometry.
-
-    (state.manualHeightPoints||[]).forEach((pt,pointIndex)=>{
-      if(!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.y))) return;
-      const feature={type:"measurement-point",pointIndex,measureId:pt._measureId||pointIndex,x:Number(pt.x),y:Number(pt.y)};
-      let at=raw.length;
-      if(state.measurementDirection==="rtl"){
-        const j=raw.findIndex(f=>Number.isFinite(Number(f.x))&&Number(f.x)<feature.x);
-        if(j>=0) at=j;
-      }else{
-        const j=raw.findIndex(f=>Number.isFinite(Number(f.x))&&Number(f.x)>feature.x);
-        if(j>=0) at=j;
-      }
-      raw.splice(at,0,feature);
-    });
-
-    // Avoid accidental semantic duplicates first.
-    const seen=new Set();
-    let dedup=raw.filter(f=>{
-      const id=
-        f.type==="fitting" ? `f${f.socketIndex}`
-        : f.type==="notch" ? `n${f.notchIndex}`
-        : f.type==="notch-side" ? `ns${f.notchIndex}:${f.side||"inner"}`
-        : f.type==="measurement-point" ? `p${f.measureId}`
-        : `o${f.segmentIndex}`;
-      if(seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-
-    // FIELD DIMENSION RULE:
-    // One physical measurement location = one height row.
-    // The scan can create both a horizontal-run feature and a notch/fitting
-    // feature at essentially the same X position. Do not ask the surveyor for
-    // two heights at the same physical station.
-    const physical=[];
-    dedup=dedup.filter(feature=>{
-      const x=Number(feature.x);
-      if(!Number.isFinite(x)) return true;
-
-      const tolerance=0.012; // normalised photo-coordinate tolerance
-
-      const duplicate=physical.some(existing=>{
-        if(Math.abs(Number(existing.x)-x)>tolerance) return false;
-
-        // Never collapse two different fittings.
-        if(feature.type==="fitting" && existing.type==="fitting") return false;
-
-        // Prefer the more specific real feature over a generic outline run.
-        return feature.type==="outline-y" ||
-               existing.type==="outline-y";
+    // Remove only truly duplicate representations of the SAME physical run.
+    // Do not collapse different main areas just because their heights are equal.
+    const uniqueMain=[];
+    mainRuns
+      .sort((a,b)=>Number(a.x)-Number(b.x))
+      .forEach(run=>{
+        const duplicate=uniqueMain.some(existing=>
+          Math.abs(Number(existing.x)-Number(run.x))<8 &&
+          Math.abs(Number(existing.y)-Number(run.y))<8
+        );
+        if(!duplicate) uniqueMain.push(run);
       });
 
-      if(!duplicate){
-        physical.push(feature);
-        return true;
+    const fittings=(state.sockets||[])
+      .map((socket,index)=>({
+        type:"fitting",
+        socketIndex:index,
+        x:Number(socket.x),
+        y:Number(socket.y)
+      }))
+      .filter(f=>Number.isFinite(f.x));
+
+    // Every manufacturing notch = TWO widths + ONE height.
+    const notches=measurementNotchEntries()
+      .map(entry=>({
+        type:"notch",
+        notchIndex:entry.index,
+        x:Number(entry.notch.x),
+        y:Number(entry.notch.y)
+      }))
+      .filter(f=>Number.isFinite(f.x));
+
+    // Build physical left-to-right sequence first.
+    let features=[
+      ...uniqueMain,
+      ...fittings,
+      ...notches
+    ].sort((a,b)=>Number(a.x)-Number(b.x));
+
+    if(state.measurementDirection==="rtl"){
+      features=features.reverse();
+    }
+
+    // Explicit additional height points are used for cases such as an
+    // off-square area requiring separate left/right heights.
+    (state.manualHeightPoints||[]).forEach((pt,pointIndex)=>{
+      if(!Number.isFinite(Number(pt.x))||!Number.isFinite(Number(pt.y))) return;
+
+      const feature={
+        type:"measurement-point",
+        pointIndex,
+        measureId:pt._measureId||pointIndex,
+        x:Number(pt.x),
+        y:Number(pt.y)
+      };
+
+      let at=features.length;
+
+      if(state.measurementDirection==="rtl"){
+        const j=features.findIndex(f=>Number(f.x)<feature.x);
+        if(j>=0) at=j;
+      }else{
+        const j=features.findIndex(f=>Number(f.x)>feature.x);
+        if(j>=0) at=j;
       }
 
-      // If the existing item is only a generic outline run and this new item
-      // is a real notch/fitting, replace the outline row with the real feature.
-      const index=physical.findIndex(existing=>
-        Math.abs(Number(existing.x)-x)<=tolerance &&
-        existing.type==="outline-y" &&
-        feature.type!=="outline-y"
-      );
-
-      if(index>=0){
-        const old=physical[index];
-        const oldIndex=dedup.indexOf(old);
-        if(oldIndex>=0) dedup.splice(oldIndex,1);
-        physical[index]=feature;
-        return true;
-      }
-
-      return false;
+      features.splice(at,0,feature);
     });
 
-    return dedup.map((f,i)=>({...f,seq:i+1,key:heightFeatureKey(f)}));
+    return features.map((f,i)=>({
+      ...f,
+      seq:i+1,
+      key:heightFeatureKey(f)
+    }));
   };
 
   const orderedMeasurementFeatures = () => widthMeasurementFeatureMap();
