@@ -355,8 +355,15 @@ const normaliseFittings = (rawFittings) => {
 
     // Real cooker plates are portrait. Override weak AI labels when the
     // detected outer faceplate is clearly tall.
-    if(ratio>=1.28){
+    if(ratio>=1.28 && ["switch","cooker"].includes(f.type)){
       return {...f,type:"cooker",orientation:"vertical"};
+    }
+
+    // If vision positively identified the physical plate as a single socket,
+    // preserve that classification. Aspect ratio alone must not turn it into
+    // a cooker switch.
+    if(f.type==="single"){
+      return {...f,type:"single"};
     }
 
     // Clearly landscape plates are double sockets unless the model has

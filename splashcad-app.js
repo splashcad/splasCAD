@@ -1787,26 +1787,10 @@
 
     if(rightOuter && rightOuter!==leftOuter && rightOuter!==extractorRun) raw.push(rightOuter);
 
-    // Field hob-wall rule: each automatic extractor shoulder owns TWO height
-    // stations. The older engine collapsed these and produced only 9 heights.
-    // Add one companion row for the left shoulder and one for the right shoulder.
-    if (shoulders.length === 2) {
-      const companions = shoulders.map((entry,idx)=>({
-        type:"notch-side",
-        notchIndex:entry.index,
-        side:idx===0?"left":"right",
-        x:Number(entry.notch.x),
-        y:Number(entry.notch.y)
-      }));
-
-      companions.forEach(feature=>{
-        const notchPos = raw.findIndex(f =>
-          f.type==="notch" && f.notchIndex===feature.notchIndex
-        );
-        if (notchPos >= 0) raw.splice(notchPos + 1, 0, feature);
-        else raw.push(feature);
-      });
-    }
+    // Dynamic field rule:
+    // automatic shoulder notches contribute only their real measured height.
+    // Do not manufacture extra height rows to reach a fixed count.
+    // Every splashback derives its measurement count from its actual geometry.
 
     (state.manualHeightPoints||[]).forEach((pt,pointIndex)=>{
       if(!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.y))) return;
