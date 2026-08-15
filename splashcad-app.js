@@ -833,25 +833,30 @@
     if (!file) return;
     try {
       if (isHeicFile(file)) {
-        try { file = await localPhotoToJpegFile(file); } catch {}
-      }
-      let imageDataUrl = await fileToDataUrl(file);
-      const sig = await file.slice(0,8).arrayBuffer();
-      const b = new Uint8Array(sig);
-      const isJpegBytes = b[0]===255 && b[1]===216 && b[2]===255;
-      const isPngBytes = b[0]===137 && b[1]===80 && b[2]===78 && b[3]===71;
-      if (isJpegBytes) imageDataUrl = imageDataUrl.replace(/^data:[^;]+/, "data:image/jpeg");
-      if (isPngBytes) imageDataUrl = imageDataUrl.replace(/^data:[^;]+/, "data:image/png");
-      if (!isJpegBytes && !isPngBytes && isHeicFile(file)) {
-        setStatus($("edgeDetectionStatus"), "Converting HEIC photo…");
-        const response = await fetch("/api/convert-heic", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.imageDataUrl) throw new Error(data.error || "HEIC conversion failed.");
-        imageDataUrl = data.imageDataUrl;
+        setStatus($("edgeDetectionStatus"), "Preparing photoó.");
+        let decodedLocally = false;
+        try {
+          const bitmap = await createImageBitmap(file);
+          const canvas = document.createElement("canvas");
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext("2d", { alpha: false });
+          ctx.drawImage(bitmap, 0, 0);
+          bitmap.close?.();
+          imageDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+          decodedLocally = imageDataUrl.startsWith("data:image/jpeg");
+        } catch {}
+        if (!decodedLocally) {
+          setStatus($("edgeDetectionStatus"), "Converting HEIC photoó.");
+          const response = await fetch("/api/convert-heic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageDataUrl })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.imageDataUrl) throw new Error(data.error || ("HEIC conversion failed (" + response.status + ")."));
+          imageDataUrl = data.imageDataUrl;
+        }
       }
       state.photoDataUrl = imageDataUrl;
       photo.onload = () => {
