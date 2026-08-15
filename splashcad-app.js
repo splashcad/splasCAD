@@ -2492,6 +2492,11 @@
     // authoritative survey geometry shown on the drawing.
     const vertices = perimeterWithSurveyNotches(scannedVertices);
 
+    // The edited photo outline is now always the master perimeter.
+    // Keep this compatibility flag defined because the remaining drawing,
+    // fitting and dimension layers still reference it.
+    const usingMeasuredProductionPerimeter = false;
+
     if (vertices.length < 3) {
       setStatus($("drawingStatus"), "Select at least three corners first.");
       return;
