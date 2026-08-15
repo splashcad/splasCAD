@@ -309,3 +309,6 @@ summary {
 
 /* Tablet field scroll fix */
 @media (pointer:coarse){.photo-stage,#photoOverlay{touch-action:pan-y!important;overscroll-behavior-y:contain}#wallPhoto{touch-action:pan-y!important}}
+
+/* Tablet photo must behave like normal scroll surface */
+@media (pointer:coarse){#wallPhoto,#photoOverlay,.photo-stage{touch-action:pan-y!important}#photoOverlay{overscroll-behavior:auto!important}}

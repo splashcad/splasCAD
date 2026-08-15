@@ -252,7 +252,7 @@
 
     state.points.forEach((point, index) => {
       overlayCtx.beginPath();
-      overlayCtx.arc(point.x, point.y, matchMedia('(pointer:coarse)').matches ? 14 : 10, 0, Math.PI * 2);
+      overlayCtx.arc(point.x, point.y, matchMedia('(pointer:coarse)').matches ? 7 : 6, 0, Math.PI * 2);
       overlayCtx.fillStyle = "#fff";
       overlayCtx.fill();
       overlayCtx.strokeStyle = "#2563eb";
@@ -949,9 +949,9 @@
 
     if (state.mode === "move") {
       const coarse=matchMedia('(pointer:coarse)').matches;
-      const socketIndex = nearestIndex(point, state.sockets, coarse?52:36);
-      const notchIndex = nearestIndex(point, state.notches, coarse?46:32);
-      const pointIndex = nearestIndex(point, state.points, coarse?44:26);
+      const socketIndex = nearestIndex(point, state.sockets, coarse?30:36);
+      const notchIndex = nearestIndex(point, state.notches, coarse?28:32);
+      const pointIndex = nearestIndex(point, state.points, coarse?22:26);
 
       if (socketIndex >= 0 || notchIndex >= 0 || pointIndex >= 0) {
         pushHistory();
@@ -3744,5 +3744,5 @@ window.addEventListener("resize", () => {
   if (photo.complete) requestAnimationFrame(resizeOverlay);
 })();
 
-setTimeout(()=>{ restoreWorkingJob(); renderHeightMeasurementSequence(); },150);
+setTimeout(()=>{ renderHeightMeasurementSequence(); },150);
 setInterval(()=>{ if(state?.imageSrc) persistWorkingJob(); },10000);
