@@ -449,39 +449,34 @@
   const orthogonaliseFieldOutline = (source) => {
     if(!Array.isArray(source) || source.length<3) return source||[];
 
-    let points=source.map(p=>({...p}));
+    // GENERAL FIELD RULE:
+    // AI owns topology. Never add/delete/merge/reorder corners here.
+    // Correct ONLY tiny photographic perspective on an edge that is already
+    // unmistakably horizontal or vertical.
+    const points=source.map(p=>({...p}));
+    const adjusted=points.map(p=>({...p}));
 
-    // Field scan geometry:
-    // preserve every AI-detected physical corner and its order.
-    // Only remove photographic perspective from runs that are already
-    // recognisably horizontal or vertical.
-    for(let pass=0;pass<3;pass++){
-      const next=points.map(p=>({...p}));
+    for(let i=0;i<points.length;i++){
+      const j=(i+1)%points.length;
+      const a=points[i], b=points[j];
+      const dx=Math.abs(Number(b.x)-Number(a.x));
+      const dy=Math.abs(Number(b.y)-Number(a.y));
 
-      for(let i=0;i<points.length;i++){
-        const j=(i+1)%points.length;
-        const a=points[i], b=points[j];
-        const dx=Math.abs(Number(b.x)-Number(a.x));
-        const dy=Math.abs(Number(b.y)-Number(a.y));
-
-        // Strongly horizontal physical run.
-        if(dx>0.035 && dy/dx<0.32){
-          const y=(Number(a.y)+Number(b.y))/2;
-          next[i].y=y;
-          next[j].y=y;
-        }
-        // Strongly vertical physical run.
-        else if(dy>0.035 && dx/dy<0.32){
-          const x=(Number(a.x)+Number(b.x))/2;
-          next[i].x=x;
-          next[j].x=x;
-        }
+      // Very conservative horizontal correction.
+      if(dx>0.045 && dy/dx<0.075){
+        const y=(Number(a.y)+Number(b.y))/2;
+        adjusted[i].y=y;
+        adjusted[j].y=y;
       }
-
-      points=next;
+      // Very conservative vertical correction.
+      else if(dy>0.045 && dx/dy<0.075){
+        const x=(Number(a.x)+Number(b.x))/2;
+        adjusted[i].x=x;
+        adjusted[j].x=x;
+      }
     }
 
-    return points;
+    return adjusted;
   };
 
   const analyseEdgeBands = () => {
