@@ -312,3 +312,13 @@ summary {
 
 /* Tablet photo must behave like normal scroll surface */
 @media (pointer:coarse){#wallPhoto,#photoOverlay,.photo-stage{touch-action:pan-y!important}#photoOverlay{overscroll-behavior:auto!important}}
+
+@keyframes splashcadScanPulse{
+  0%{opacity:.55}
+  50%{opacity:1}
+  100%{opacity:.55}
+}
+.scan-working{
+  animation:splashcadScanPulse .8s infinite;
+  cursor:wait!important;
+}

@@ -536,7 +536,6 @@
 
 
   const getCurrentPhotoDataUrl = () => {
-    if (state.photoDataUrl) return state.photoDataUrl;
     if (!photo.complete || !photo.naturalWidth) return null;
 
     const canvas = document.createElement("canvas");

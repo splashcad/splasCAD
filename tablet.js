@@ -82,7 +82,30 @@
   }
   if(tabletScanButton){
     tabletScanButton.addEventListener('click',()=>{
-      if(oneClickDetectButton) oneClickDetectButton.click();
+      if(!oneClickDetectButton) return;
+
+      const originalText='Scan outline + sockets';
+      tabletScanButton.disabled=true;
+      tabletScanButton.textContent='Scanning… please wait';
+      tabletScanButton.classList.add('scan-working');
+
+      oneClickDetectButton.click();
+
+      const started=Date.now();
+      const timer=setInterval(()=>{
+        const edgeButton=document.getElementById('detectEdgesButton');
+        const fittingButton=document.getElementById('detectFittingsButton');
+        const working=
+          edgeButton?.disabled ||
+          fittingButton?.disabled;
+
+        if((!working && Date.now()-started>1500) || Date.now()-started>90000){
+          clearInterval(timer);
+          tabletScanButton.disabled=false;
+          tabletScanButton.textContent=originalText;
+          tabletScanButton.classList.remove('scan-working');
+        }
+      },250);
     });
   }
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
