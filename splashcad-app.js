@@ -1225,56 +1225,39 @@
   const scaledPoints = () => {
     if (state.points.length < 3) return [];
 
-    // Hob-wall safety: the visible edited 8-point topology is orthogonal.
-    // Preserve its actual positions but remove tiny perspective differences
-    // that otherwise become exaggerated diagonal edges in the CAD drawing.
-    let sourcePoints=state.points.map(point=>({...point}));
-
-    if(sourcePoints.length===8){
-      const avg=(a,b)=>(Number(a)+Number(b))/2;
-
-      const leftX=avg(sourcePoints[0].x,sourcePoints[7].x);
-      const rightX=avg(sourcePoints[1].x,sourcePoints[2].x);
-      const bottomY=avg(sourcePoints[0].y,sourcePoints[1].y);
-
-      const rightShoulderY=avg(sourcePoints[2].y,sourcePoints[3].y);
-      const extractorRightX=avg(sourcePoints[3].x,sourcePoints[4].x);
-      const extractorTopY=avg(sourcePoints[4].y,sourcePoints[5].y);
-      const extractorLeftX=avg(sourcePoints[5].x,sourcePoints[6].x);
-      const leftShoulderY=avg(sourcePoints[6].y,sourcePoints[7].y);
-
-      sourcePoints=[
-        {x:leftX,y:bottomY},
-        {x:rightX,y:bottomY},
-        {x:rightX,y:rightShoulderY},
-        {x:extractorRightX,y:rightShoulderY},
-        {x:extractorRightX,y:extractorTopY},
-        {x:extractorLeftX,y:extractorTopY},
-        {x:extractorLeftX,y:leftShoulderY},
-        {x:leftX,y:leftShoulderY}
-      ];
-    }
+    // LOCKED FIELD RULE:
+    // The edited cyan outline is authoritative.
+    // NEVER reinterpret an outline because it happens to contain 8 points.
+    // NEVER replace it with the old Benchmark/full-hob topology.
+    const sourcePoints=state.points.map(point=>({
+      ...point,
+      x:Number(point.x),
+      y:Number(point.y)
+    }));
 
     if (Number.isFinite(state.mmPerPixel) && state.mmPerPixel > 0) {
       const origin = sourcePoints[0];
-      return sourcePoints.map((point) => ({
-        x: (point.x - origin.x) * state.mmPerPixel,
-        y: (origin.y - point.y) * state.mmPerPixel
+
+      return sourcePoints.map(point => ({
+        x: (point.x-origin.x)*state.mmPerPixel,
+        y: (origin.y-point.y)*state.mmPerPixel
       }));
     }
 
-    const xs = sourcePoints.map((point) => point.x);
-    const ys = sourcePoints.map((point) => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const width = Number($("widthInput").value) || 1;
-    const height = Number($("heightInput").value) || 1;
+    const xs=sourcePoints.map(point=>point.x);
+    const ys=sourcePoints.map(point=>point.y);
 
-    return sourcePoints.map((point) => ({
-      x: ((point.x - minX) / (maxX - minX || 1)) * width,
-      y: ((maxY - point.y) / (maxY - minY || 1)) * height
+    const minX=Math.min(...xs);
+    const maxX=Math.max(...xs);
+    const minY=Math.min(...ys);
+    const maxY=Math.max(...ys);
+
+    const width=Number($("widthInput")?.value)||1;
+    const height=Number($("heightInput")?.value)||1;
+
+    return sourcePoints.map(point=>({
+      x:((point.x-minX)/(maxX-minX||1))*width,
+      y:((maxY-point.y)/(maxY-minY||1))*height
     }));
   };
 
