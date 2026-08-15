@@ -832,8 +832,23 @@
   const loadPhotoFile = async (file) => {
     if (!file) return;
     try {
-      let imageDataUrl = await fileToDataUrl(file);
-      if (isHeicFile(file)) {
+      const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+      const isActualJpeg = header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF;
+      const isActualPng =
+        header[0] === 0x89 && header[1] === 0x50 &&
+        header[2] === 0x4E && header[3] === 0x47;
+
+      let imageDataUrl;
+
+      if (isActualJpeg) {
+        imageDataUrl = await fileToDataUrl(new Blob([file], { type: "image/jpeg" }));
+      } else if (isActualPng) {
+        imageDataUrl = await fileToDataUrl(new Blob([file], { type: "image/png" }));
+      } else {
+        imageDataUrl = await fileToDataUrl(file);
+      }
+
+      if (!isActualJpeg && !isActualPng && isHeicFile(file)) {
         setStatus($("edgeDetectionStatus"), "Converting HEIC locally…");
 
         if (typeof heic2any !== "function") {
@@ -878,7 +893,12 @@
       photo.src = state.photoDataUrl;
     } catch (error) {
       state.photoDataUrl = null;
-      const message = error instanceof Error ? error.message : "This photo could not be loaded.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Photo import failed: " + JSON.stringify(error);
       setStatus($("edgeDetectionStatus"), message, false);
       alert(message);
     }
