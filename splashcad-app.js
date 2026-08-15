@@ -851,17 +851,15 @@
       if (!isActualJpeg && !isActualPng && isHeicFile(file)) {
         setStatus($("edgeDetectionStatus"), "Converting HEIC locally…");
 
-        if (typeof heic2any !== "function") {
-          throw new Error("Local HEIC converter did not load.");
+        if (typeof HeicTo !== "function") {
+          throw new Error("New local HEIC converter did not load.");
         }
 
-        const converted = await heic2any({
+        const jpegBlob = await HeicTo({
           blob: file,
-          toType: "image/jpeg",
+          type: "image/jpeg",
           quality: 0.9
         });
-
-        const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
         imageDataUrl = await fileToDataUrl(jpegBlob);
 
         if (!imageDataUrl.startsWith("data:image/jpeg")) {

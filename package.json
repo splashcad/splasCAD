@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "heic-convert": "^2.1.0",
+    "heic-to": "^1.5.2",
     "heic2any": "^0.0.4"
   }
 }
