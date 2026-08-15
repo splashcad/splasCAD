@@ -1682,6 +1682,28 @@
     if(shoulderOrdered[1]) raw.push({type:"notch",notchIndex:shoulderOrdered[1].index,x:Number(shoulderOrdered[1].notch.x),y:Number(shoulderOrdered[1].notch.y)});
     manualOrdered.forEach(e=>raw.push({type:"notch",notchIndex:e.index,x:Number(e.notch.x),y:Number(e.notch.y)}));
     raw.push(...fitOrdered);
+
+    // Field rule: EVERY genuine horizontal top run owns a height from the
+    // worktop/bottom datum. Do not discard an intermediate run simply because
+    // it is not the outer edge or extractor top. This captures, for example,
+    // the separate cabinet-under height over the tap.
+    const alreadyUsedRunIndexes=new Set(
+      raw
+        .filter(f=>f.type==="outline-y")
+        .map(f=>f.segmentIndex)
+    );
+
+    const remainingRuns=runsByX
+      .filter(run=>
+        run!==rightOuter &&
+        !alreadyUsedRunIndexes.has(run.segmentIndex)
+      )
+      .sort((a,b)=>Number(a.x)-Number(b.x));
+
+    if(state.measurementDirection==="rtl") remainingRuns.reverse();
+
+    raw.push(...remainingRuns);
+
     if(rightOuter && rightOuter!==leftOuter && rightOuter!==extractorRun) raw.push(rightOuter);
 
     // Field hob-wall rule: each automatic extractor shoulder owns TWO height
@@ -1722,7 +1744,12 @@
     // Avoid accidental duplicates while preserving semantic order.
     const seen=new Set();
     const dedup=raw.filter(f=>{
-      const id=f.type==="fitting"?`f${f.socketIndex}`:f.type==="notch"?`n${f.notchIndex}`:f.type==="measurement-point"?`p${f.measureId}`:`o${f.segmentIndex}`;
+      const id=
+        f.type==="fitting" ? `f${f.socketIndex}`
+        : f.type==="notch" ? `n${f.notchIndex}`
+        : f.type==="notch-side" ? `ns${f.notchIndex}:${f.side||"inner"}`
+        : f.type==="measurement-point" ? `p${f.measureId}`
+        : `o${f.segmentIndex}`;
       if(seen.has(id)) return false; seen.add(id); return true;
     });
     return dedup.map((f,i)=>({...f,seq:i+1,key:heightFeatureKey(f)}));
