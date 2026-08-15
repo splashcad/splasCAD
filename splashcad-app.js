@@ -1806,17 +1806,67 @@
       raw.splice(at,0,feature);
     });
 
-    // Avoid accidental duplicates while preserving semantic order.
+    // Avoid accidental semantic duplicates first.
     const seen=new Set();
-    const dedup=raw.filter(f=>{
+    let dedup=raw.filter(f=>{
       const id=
         f.type==="fitting" ? `f${f.socketIndex}`
         : f.type==="notch" ? `n${f.notchIndex}`
         : f.type==="notch-side" ? `ns${f.notchIndex}:${f.side||"inner"}`
         : f.type==="measurement-point" ? `p${f.measureId}`
         : `o${f.segmentIndex}`;
-      if(seen.has(id)) return false; seen.add(id); return true;
+      if(seen.has(id)) return false;
+      seen.add(id);
+      return true;
     });
+
+    // FIELD DIMENSION RULE:
+    // One physical measurement location = one height row.
+    // The scan can create both a horizontal-run feature and a notch/fitting
+    // feature at essentially the same X position. Do not ask the surveyor for
+    // two heights at the same physical station.
+    const physical=[];
+    dedup=dedup.filter(feature=>{
+      const x=Number(feature.x);
+      if(!Number.isFinite(x)) return true;
+
+      const tolerance=0.012; // normalised photo-coordinate tolerance
+
+      const duplicate=physical.some(existing=>{
+        if(Math.abs(Number(existing.x)-x)>tolerance) return false;
+
+        // Never collapse two different fittings.
+        if(feature.type==="fitting" && existing.type==="fitting") return false;
+
+        // Prefer the more specific real feature over a generic outline run.
+        return feature.type==="outline-y" ||
+               existing.type==="outline-y";
+      });
+
+      if(!duplicate){
+        physical.push(feature);
+        return true;
+      }
+
+      // If the existing item is only a generic outline run and this new item
+      // is a real notch/fitting, replace the outline row with the real feature.
+      const index=physical.findIndex(existing=>
+        Math.abs(Number(existing.x)-x)<=tolerance &&
+        existing.type==="outline-y" &&
+        feature.type!=="outline-y"
+      );
+
+      if(index>=0){
+        const old=physical[index];
+        const oldIndex=dedup.indexOf(old);
+        if(oldIndex>=0) dedup.splice(oldIndex,1);
+        physical[index]=feature;
+        return true;
+      }
+
+      return false;
+    });
+
     return dedup.map((f,i)=>({...f,seq:i+1,key:heightFeatureKey(f)}));
   };
 
