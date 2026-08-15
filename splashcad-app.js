@@ -809,7 +809,7 @@
     reader.readAsDataURL(file);
   });
 
-  const isHeicFile = (file) => /\.(heic|heif)$/i.test(file?.name || "") || /^image\/(heic|heif)$/i.test(file?.type || "");
+  const isHeicFile = (file) => /^image\/(heic|heif)$/i.test(file?.type || "") || ((!file?.type || file.type === "application/octet-stream") && /\.(heic|heif)$/i.test(file?.name || ""));
 
   const loadPhotoFile = async (file) => {
     if (!file) return;

@@ -33,7 +33,7 @@
       // Samsung/Android HEIC output entirely, so the detector always receives a
       // browser-safe image without relying on server-side HEIC conversion.
       if(!navigator.mediaDevices?.getUserMedia){
-        if(cameraInput) cameraInput.click();
+        if(cameraInput){cameraInput.accept='image/jpeg';cameraInput.click();}
         return;
       }
       let stream;
@@ -50,7 +50,7 @@
         await video.play();
       }catch(error){
         close();
-        if(cameraInput) cameraInput.click();
+        if(cameraInput){cameraInput.accept='image/jpeg';cameraInput.click();}
         return;
       }
       overlay.querySelector('[data-camera-capture]').addEventListener('click',()=>{
