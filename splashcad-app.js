@@ -1471,6 +1471,7 @@
     : `wo:${f.segmentIndex}`;
   const heightFeatureKey = (f) => f.type==="fitting" ? `hf:${state.sockets?.[f.socketIndex]?._measureId||f.socketIndex}`
     : f.type==="notch" ? `hn:${state.notches?.[f.notchIndex]?._measureId||f.notchIndex}`
+    : f.type==="notch-side" ? `hns:${state.notches?.[f.notchIndex]?._measureId||f.notchIndex}:${f.side||"inner"}`
     : f.type==="measurement-point" ? `hp:${f.measureId}`
     : `ho:${f.segmentIndex}`;
 
@@ -1652,6 +1653,27 @@
     manualOrdered.forEach(e=>raw.push({type:"notch",notchIndex:e.index,x:Number(e.notch.x),y:Number(e.notch.y)}));
     raw.push(...fitOrdered);
     if(rightOuter && rightOuter!==leftOuter && rightOuter!==extractorRun) raw.push(rightOuter);
+
+    // Field hob-wall rule: each automatic extractor shoulder owns TWO height
+    // stations. The older engine collapsed these and produced only 9 heights.
+    // Add one companion row for the left shoulder and one for the right shoulder.
+    if (shoulders.length === 2) {
+      const companions = shoulders.map((entry,idx)=>({
+        type:"notch-side",
+        notchIndex:entry.index,
+        side:idx===0?"left":"right",
+        x:Number(entry.notch.x),
+        y:Number(entry.notch.y)
+      }));
+
+      companions.forEach(feature=>{
+        const notchPos = raw.findIndex(f =>
+          f.type==="notch" && f.notchIndex===feature.notchIndex
+        );
+        if (notchPos >= 0) raw.splice(notchPos + 1, 0, feature);
+        else raw.push(feature);
+      });
+    }
 
     (state.manualHeightPoints||[]).forEach((pt,pointIndex)=>{
       if(!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.y))) return;
@@ -2212,7 +2234,7 @@
 
       heightFeatures.forEach((feature,i)=>{
         if(feature?.type==="fitting" && state.sockets?.[feature.socketIndex]?.type!=="hole") productionHeights[i]=measuredHeights[i]+5;
-        else if(feature?.type==="notch") productionHeights[i]=Math.max(1,measuredHeights[i]-3);
+        else if(feature?.type==="notch" || feature?.type==="notch-side") productionHeights[i]=Math.max(1,measuredHeights[i]-3);
         else if(feature?.type==="outline-y" || feature?.type==="outer") productionHeights[i]=Math.max(1,measuredHeights[i]-3);
       });
 
@@ -2319,9 +2341,12 @@
     }
     // The scan supplies topology. Once every site measurement is present, the
     // measured drawing must use those real dimensions for its physical geometry.
+    // Field geometry rule: the edited outline is authoritative.
+    // Applying dimensions annotates/calculates from that outline; it must never
+    // silently replace the surveyor's edited shape with a second perimeter.
     const scannedVertices = scaledPoints();
-    const enteredVertices = measuredOutlineVertices();
-    const vertices = enteredVertices?.length>=3 ? enteredVertices : scannedVertices;
+    const enteredVertices = null;
+    const vertices = scannedVertices;
 
     if (vertices.length < 3) {
       setStatus($("drawingStatus"), "Select at least three corners first.");
@@ -2884,7 +2909,11 @@
 
         geomHeightFeatures.forEach((feature,i)=>{
           const seq=i+1, h=Number(geomHeights[i]); if(!(h>0)) return;
-          let anchor=feature.type==="fitting"?fittingAnchor(feature,h):feature.type==="notch"?notchAnchor(feature,h):outlineAnchor(feature,h);
+          let anchor=feature.type==="fitting"
+            ? fittingAnchor(feature,h)
+            : (feature.type==="notch" || feature.type==="notch-side")
+              ? notchAnchor(feature,h)
+              : outlineAnchor(feature,h);
           if(!anchor || !Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)) return;
           drawingCtx.save(); drawingCtx.strokeStyle=hColour; drawingCtx.fillStyle=hColour; drawingCtx.lineWidth=1.6; drawingCtx.font="900 13px -apple-system, sans-serif";
           if(feature.type==="outline-y" && feature.outerSide){

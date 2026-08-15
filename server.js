@@ -471,6 +471,34 @@ Return JSON only:
 
     let points = validatePoints(proposal.points);
 
+    // Tablet field fix: an 8-corner full hob wall must remain orthogonal.
+    // The AI chooses the wall junction positions, but perspective must never
+    // turn the left/right ends or extractor shoulders into diagonal glass edges.
+    if (points.length === 8) {
+      const avg = (a,b) => (Number(a)+Number(b))/2;
+
+      const leftX  = avg(points[0].x, points[7].x);
+      const rightX = avg(points[1].x, points[2].x);
+      const bottomY = avg(points[0].y, points[1].y);
+
+      const rightShoulderY = avg(points[2].y, points[3].y);
+      const extractorRightX = avg(points[3].x, points[4].x);
+      const extractorTopY = avg(points[4].y, points[5].y);
+      const extractorLeftX = avg(points[5].x, points[6].x);
+      const leftShoulderY = avg(points[6].y, points[7].y);
+
+      points = [
+        {x:leftX, y:bottomY},
+        {x:rightX, y:bottomY},
+        {x:rightX, y:rightShoulderY},
+        {x:extractorRightX, y:rightShoulderY},
+        {x:extractorRightX, y:extractorTopY},
+        {x:extractorLeftX, y:extractorTopY},
+        {x:extractorLeftX, y:leftShoulderY},
+        {x:leftX, y:leftShoulderY}
+      ];
+    }
+
     // Keep the existing Benchmark 001 topology guardrail.
     if (job.benchmark && points.length !== 8) {
       throw new Error(`Benchmark outline must contain exactly 8 corners; AI returned ${points.length}. Run detection again.`);
