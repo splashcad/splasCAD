@@ -1899,26 +1899,8 @@
 
   // Alpha 6.0.4 — Benchmark 001 is a permanent regression fixture.
   // Never make the surveyor re-enter these values while the dimension engine is being developed.
-  const seedBenchmark001Measurements = () => {
-    const customer=String($("customerInput")?.value||"").trim();
-    const counts=requiredMeasurementCounts();
-    if(customer!=="Benchmark 001" || counts.widths!==10 || counts.heights!==10) return false;
-    const hasWidths=(state.productionMeasurements?.stations||[]).some(r=>Number(r.value)>0);
-    const hasHeights=(state.productionMeasurements?.heights||[]).some(r=>Number(r.value)>0);
-    const hasOverall=Number(state.productionMeasurements?.overallWidth)>0;
-    if(hasWidths || hasHeights || hasOverall) return false;
-    const w=[243,595,623,1215,1237,2100,2110,2044,2170,2352];
-    const h=[409,108,388,730,387,388,115,117,117,409];
-    const wf=widthMeasurementFeatureMap();
-    const hf=heightMeasurementFeatureMap();
-    state.productionMeasurements.stations=w.map((value,i)=>({key:wf[i]?.key||`legacy-w-${i+1}`,value}));
-    state.productionMeasurements.heights=h.map((value,i)=>({key:hf[i]?.key||`legacy-h-${i+1}`,value}));
-    state.productionMeasurements.overallWidth=2923;
-    state.productionMeasurements.offSquareOverallWidth=2930;
-    if($("prodOverallWidth")) $("prodOverallWidth").value="2923";
-    if($("prodOffSquareOverallWidth")) $("prodOffSquareOverallWidth").value="2930";
-    return true;
-  };
+  // Benchmark values must never be silently injected into a live survey.
+  const seedBenchmark001Measurements = () => false;
 
   const renderMeasurementSequence = () => {
     seedBenchmark001Measurements();
@@ -2430,9 +2412,24 @@
       });
 
       heightFeatures.forEach((feature,i)=>{
-        if(feature?.type==="fitting" && state.sockets?.[feature.socketIndex]?.type!=="hole") productionHeights[i]=measuredHeights[i]+5;
-        else if(feature?.type==="notch" || feature?.type==="notch-side") productionHeights[i]=Math.max(1,measuredHeights[i]-3);
-        else if(feature?.type==="outline-y" || feature?.type==="outer") productionHeights[i]=Math.max(1,measuredHeights[i]-3);
+        // Fitting measurement is to faceplate edge.
+        // Cut-out begins 5 mm inside that edge.
+        if(
+          feature?.type==="fitting" &&
+          state.sockets?.[feature.socketIndex]?.type!=="hole"
+        ){
+          productionHeights[i]=measuredHeights[i]+5;
+        }
+        // Notch clearance = 3 mm.
+        else if(feature?.type==="notch" || feature?.type==="notch-side"){
+          productionHeights[i]=Math.max(1,measuredHeights[i]-3);
+        }
+        // MAIN HEIGHTS DO NOT RECEIVE A BLANKET REDUCTION.
+        // Any special corner/reveal/off-square allowance is applied only
+        // when that specific feature requires it.
+        else{
+          productionHeights[i]=measuredHeights[i];
+        }
       });
 
       // Floor-drop / worktop-return profile. This topology has three cumulative
@@ -2461,8 +2458,13 @@
       state.productionAdjustedMeasurements={
         widths:productionWidths,
         heights:productionHeights,
-        overallWidth:measuredOverall-(floorDropProfile?3:4),
-        offSquareOverallWidth:(Number.isFinite(measuredOffSquare)&&measuredOffSquare>0)?measuredOffSquare-(floorDropProfile?3:4):null
+        // No invented blanket -4 mm allowance.
+        // Keep measured overall unless a recognised profile has a specific rule.
+        overallWidth:floorDropProfile ? measuredOverall-3 : measuredOverall,
+        offSquareOverallWidth:
+          (Number.isFinite(measuredOffSquare)&&measuredOffSquare>0)
+            ? (floorDropProfile ? measuredOffSquare-3 : measuredOffSquare)
+            : null
       };
 
       state.productionModificationsApplied=true;
@@ -2510,6 +2512,242 @@
       "Reverted to measured values. Production modifications are off.",true);
   };
 
+
+  const buildMeasurementDrivenPerimeter = (productionOnly=false) => {
+    const widthFeatures=widthMeasurementFeatureMap();
+    const heightFeatures=heightMeasurementFeatureMap();
+
+    const measuredWidthValues=valuesByFeatureKey(
+      state.productionMeasurements?.stations||[],
+      widthFeatures
+    );
+    const measuredHeightValues=valuesByFeatureKey(
+      state.productionMeasurements?.heights||[],
+      heightFeatures
+    );
+
+    const W=productionOnly
+      ? Number(state.productionAdjustedMeasurements?.overallWidth)
+      : Number(state.productionMeasurements?.overallWidth);
+
+    const widthValues=productionOnly
+      ? (state.productionAdjustedMeasurements?.widths||[]).map(Number)
+      : measuredWidthValues.map(Number);
+
+    const heightValues=productionOnly
+      ? (state.productionAdjustedMeasurements?.heights||[]).map(Number)
+      : measuredHeightValues.map(Number);
+
+    if(
+      !(W>0) ||
+      widthValues.length!==widthFeatures.length ||
+      heightValues.length!==heightFeatures.length ||
+      widthValues.some(v=>!(v>0)) ||
+      heightValues.some(v=>!(v>0))
+    ){
+      return null;
+    }
+
+    const pts=state.points||[];
+    if(pts.length<3) return null;
+
+    const sourceXs=pts.map(p=>Number(p.x)).filter(Number.isFinite);
+    const sourceYs=pts.map(p=>Number(p.y)).filter(Number.isFinite);
+    if(!sourceXs.length||!sourceYs.length) return null;
+
+    const minX=Math.min(...sourceXs);
+    const maxX=Math.max(...sourceXs);
+
+    // Physical X anchors.
+    // Endpoints are always 0 and overall width.
+    // Internal outline/notch measurements then correct the photo proportions.
+    const xAnchors=[
+      {screen:minX,physical:0},
+      {screen:maxX,physical:W}
+    ];
+
+    widthFeatures.forEach((feature,i)=>{
+      const value=Number(widthValues[i]);
+      if(!(value>0)) return;
+
+      // Fitting widths locate fittings, not the physical glass perimeter.
+      // Do not distort glass outline from a socket position.
+      if(feature.type==="fitting") return;
+
+      const sx=Number(feature.x);
+      if(!Number.isFinite(sx)) return;
+
+      const physical=state.measurementDirection==="rtl"
+        ? W-value
+        : value;
+
+      xAnchors.push({screen:sx,physical});
+    });
+
+    xAnchors.sort((a,b)=>a.screen-b.screen);
+
+    // Collapse only practically identical screen anchors.
+    const cleanAnchors=[];
+    xAnchors.forEach(anchor=>{
+      const existing=cleanAnchors.find(a=>Math.abs(a.screen-anchor.screen)<2);
+      if(existing){
+        existing.physical=(existing.physical+anchor.physical)/2;
+      }else{
+        cleanAnchors.push({...anchor});
+      }
+    });
+
+    const physicalX=(screenX)=>{
+      if(screenX<=cleanAnchors[0].screen) return cleanAnchors[0].physical;
+      if(screenX>=cleanAnchors[cleanAnchors.length-1].screen)
+        return cleanAnchors[cleanAnchors.length-1].physical;
+
+      for(let i=0;i<cleanAnchors.length-1;i++){
+        const a=cleanAnchors[i];
+        const b=cleanAnchors[i+1];
+
+        if(screenX>=a.screen && screenX<=b.screen){
+          const t=(screenX-a.screen)/((b.screen-a.screen)||1);
+          return a.physical+t*(b.physical-a.physical);
+        }
+      }
+
+      return ((screenX-minX)/(maxX-minX||1))*W;
+    };
+
+    // Bind real entered MAIN heights directly to their actual horizontal run.
+    const runHeight=new Map();
+    const notchHeight=new Map();
+
+    heightFeatures.forEach((feature,i)=>{
+      const value=Number(heightValues[i]);
+      if(!(value>0)) return;
+
+      if(feature.type==="outline-y"){
+        runHeight.set(Number(feature.segmentIndex),value);
+      }
+
+      if(feature.type==="notch" || feature.type==="notch-side"){
+        notchHeight.set(Number(feature.notchIndex),value);
+      }
+    });
+
+    // Rebuild the edited outline using the entered dimensions.
+    // Each upper horizontal section receives its own entered main height.
+    let perimeter=pts.map((pt,index)=>{
+      const prevIndex=(index-1+pts.length)%pts.length;
+
+      let height=null;
+
+      if(runHeight.has(index)){
+        height=runHeight.get(index);
+      }else if(runHeight.has(prevIndex)){
+        height=runHeight.get(prevIndex);
+      }
+
+      // No upper-run height means the worktop/bottom datum.
+      if(!(height>0)) height=0;
+
+      return {
+        x:physicalX(Number(pt.x)),
+        y:height
+      };
+    });
+
+    // Remove zero-length duplicate vertices only.
+    perimeter=perimeter.filter((point,index,array)=>{
+      if(!index) return true;
+      const prev=array[index-1];
+      return Math.abs(point.x-prev.x)>0.5 || Math.abs(point.y-prev.y)>0.5;
+    });
+
+    // Insert every notch as a REAL rectangular U-shaped bite.
+    // One notch = TWO width stations + ONE height station.
+    const notchIndexes=[...new Set(
+      widthFeatures
+        .filter(f=>f.type==="notch-edge")
+        .map(f=>Number(f.notchIndex))
+    )];
+
+    notchIndexes.forEach(notchIndex=>{
+      const edgeIndexes=[];
+
+      widthFeatures.forEach((feature,i)=>{
+        if(feature.type==="notch-edge" && Number(feature.notchIndex)===notchIndex){
+          edgeIndexes.push(i);
+        }
+      });
+
+      if(edgeIndexes.length<2) return;
+
+      let edgeValues=edgeIndexes
+        .map(i=>Number(widthValues[i]))
+        .filter(v=>v>0);
+
+      if(edgeValues.length<2) return;
+
+      let physicalEdges=edgeValues.map(v=>
+        state.measurementDirection==="rtl" ? W-v : v
+      ).sort((a,b)=>a-b);
+
+      const x1=physicalEdges[0];
+      const x2=physicalEdges[1];
+      const bottomHeight=Number(notchHeight.get(notchIndex));
+
+      if(!(x2>x1) || !(bottomHeight>0)) return;
+
+      const candidates=[];
+
+      for(let i=0;i<perimeter.length;i++){
+        const a=perimeter[i];
+        const b=perimeter[(i+1)%perimeter.length];
+
+        if(Math.abs(a.y-b.y)>0.5) continue;
+
+        const lo=Math.min(a.x,b.x);
+        const hi=Math.max(a.x,b.x);
+
+        if(x1>=lo-1 && x2<=hi+1 && a.y>bottomHeight){
+          candidates.push({
+            index:i,
+            y:a.y,
+            distance:Math.abs(((lo+hi)/2)-((x1+x2)/2))
+          });
+        }
+      }
+
+      if(!candidates.length) return;
+
+      candidates.sort((a,b)=>a.distance-b.distance);
+      const target=candidates[0];
+      const i=target.index;
+      const a=perimeter[i];
+      const b=perimeter[(i+1)%perimeter.length];
+
+      const bite=a.x<=b.x
+        ? [
+            {x:x1,y:a.y},
+            {x:x1,y:bottomHeight},
+            {x:x2,y:bottomHeight},
+            {x:x2,y:a.y}
+          ]
+        : [
+            {x:x2,y:a.y},
+            {x:x2,y:bottomHeight},
+            {x:x1,y:bottomHeight},
+            {x:x1,y:a.y}
+          ];
+
+      perimeter=[
+        ...perimeter.slice(0,i+1),
+        ...bite,
+        ...perimeter.slice(i+1)
+      ];
+    });
+
+    return perimeter;
+  };
+
   const renderDrawing = (mode = "measured") => {
     const previousDrawing = drawing;
     const previousCtx = drawingCtx;
@@ -2542,16 +2780,15 @@
     // Applying dimensions annotates/calculates from that outline; it must never
     // silently replace the surveyor's edited shape with a second perimeter.
     const scannedVertices = scaledPoints();
-    const enteredVertices = null;
 
-    // Edited cyan outline + manually placed notch markers together form the
-    // authoritative survey geometry shown on the drawing.
-    const vertices = perimeterWithSurveyNotches(scannedVertices);
+    // Scan determines WHAT the shape is.
+    // Measurements determine HOW LARGE every part of that shape is.
+    const enteredVertices = buildMeasurementDrivenPerimeter(productionOnly);
 
-    // The edited photo outline is now always the master perimeter.
-    // Keep this compatibility flag defined because the remaining drawing,
-    // fitting and dimension layers still reference it.
-    const usingMeasuredProductionPerimeter = false;
+    const vertices = enteredVertices ||
+      perimeterWithSurveyNotches(scannedVertices);
+
+    const usingMeasuredProductionPerimeter = !!enteredVertices;
 
     if (vertices.length < 3) {
       setStatus($("drawingStatus"), "Select at least three corners first.");
@@ -3647,19 +3884,78 @@
   });
   $("radiusModeButton")?.addEventListener("click",()=>{ setMode("radius"); setStatus($("photoStatus"),"Tap the corner to radius. Enter the radius in the popup.",true); });
   const applyShoulderNotches = () => {
-    // Shoulder notches are the two lower corners of the extractor rise: points 7 and 4
-    // in the approved 8-point survey order shown on the user's drawing.
     state.notches = state.notches.filter(n => !n.shoulderAuto);
-    if (state.shoulderNotchesEnabled && state.points.length >= 8) {
-      [6, 3].forEach(i => {
-        const p = state.points[i];
-        if (p) state.notches.push({ x: p.x, y: p.y, shoulderAuto: true });
-      });
+
+    if(state.shoulderNotchesEnabled && state.points.length>=6){
+      const pts=state.points;
+      const xs=pts.map(p=>Number(p.x)).filter(Number.isFinite);
+      const spanX=Math.max(...xs)-Math.min(...xs);
+      const candidates=[];
+
+      // Find an INTERNAL raised horizontal section whose two ends both
+      // drop down to lower splashback runs. That is the extractor rise.
+      for(let i=0;i<pts.length;i++){
+        const a=pts[i];
+        const b=pts[(i+1)%pts.length];
+        const prev=pts[(i-1+pts.length)%pts.length];
+        const next=pts[(i+2)%pts.length];
+
+        if(!a||!b||!prev||!next) continue;
+
+        const dx=Math.abs(Number(b.x)-Number(a.x));
+        const dy=Math.abs(Number(b.y)-Number(a.y));
+
+        if(!(dx>spanX*0.06 && dy<=dx*0.12)) continue;
+
+        const leftVertical=
+          Math.abs(Number(prev.x)-Number(a.x)) <
+          Math.max(10,Math.abs(Number(prev.y)-Number(a.y))*0.25);
+
+        const rightVertical=
+          Math.abs(Number(next.x)-Number(b.x)) <
+          Math.max(10,Math.abs(Number(next.y)-Number(b.y))*0.25);
+
+        const prevLower=Number(prev.y)>Number(a.y)+8;
+        const nextLower=Number(next.y)>Number(b.y)+8;
+
+        const interior=
+          Math.min(Number(a.x),Number(b.x))>Math.min(...xs)+spanX*0.05 &&
+          Math.max(Number(a.x),Number(b.x))<Math.max(...xs)-spanX*0.05;
+
+        if(leftVertical && rightVertical && prevLower && nextLower && interior){
+          candidates.push({
+            score:dx,
+            left:Number(prev.x)<Number(next.x)?prev:next,
+            right:Number(prev.x)<Number(next.x)?next:prev
+          });
+        }
+      }
+
+      candidates.sort((a,b)=>b.score-a.score);
+      const extractor=candidates[0];
+
+      if(extractor){
+        state.notches.push({
+          x:extractor.left.x,
+          y:extractor.left.y,
+          shoulderAuto:true
+        });
+
+        state.notches.push({
+          x:extractor.right.x,
+          y:extractor.right.y,
+          shoulderAuto:true
+        });
+      }
     }
+
+    ensureMeasureIds();
     redrawOverlay();
     generateDrawing();
     renderMeasurementSequence();
     renderHeightMeasurementSequence();
+    updateMeasurementCountBadge();
+    persistWorkingJob();
   };
   $("shoulderNotchesButton").addEventListener("click", () => {
     pushHistory();
