@@ -1158,7 +1158,7 @@
     // Hob-wall safety: the visible edited 8-point topology is orthogonal.
     // Preserve its actual positions but remove tiny perspective differences
     // that otherwise become exaggerated diagonal edges in the CAD drawing.
-    let sourcePoints=sourcePoints.map(point=>({...point}));
+    let sourcePoints=state.points.map(point=>({...point}));
 
     if(sourcePoints.length===8){
       const avg=(a,b)=>(Number(a)+Number(b))/2;
