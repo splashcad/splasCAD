@@ -578,13 +578,10 @@
           roughHeightMm: Number($("heightInput").value) || null,
           detectionMode: $("detectionModeInput").value,
           surveyorGuidance: $("detectionInstructionInput").value.trim(),
-          benchmark: $("detectionModeInput").value === "benchmark" ? {
-            name: "Benchmark 001", status: "final adjusted approved production measurements",
-            overallWidthMm: 2919, sideHeightMm: 406, centralRiseMm: 727,
-            shoulderChecksMm: [385,384],
-            horizontalStationsMm: [248,592,620,1212,1240,2049,2175,2357],
-            rule: "Use measurements as semantic shape guidance only. Never infer pixel scale or manufacture dimensions from the photograph."
-          } : null
+          // Field scans must be driven only by the actual photograph.
+          // Benchmark 001 is a historical validation reference, not a live
+          // topology constraint.
+          benchmark: null
         }
       };
       const response=await fetch("/api/detect-outline", {
