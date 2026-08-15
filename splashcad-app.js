@@ -252,11 +252,11 @@
 
     state.points.forEach((point, index) => {
       overlayCtx.beginPath();
-      overlayCtx.arc(point.x, point.y, matchMedia('(pointer:coarse)').matches ? 7 : 6, 0, Math.PI * 2);
+      overlayCtx.arc(point.x, point.y, matchMedia('(pointer:coarse)').matches ? 3.5 : 4, 0, Math.PI * 2);
       overlayCtx.fillStyle = "#fff";
       overlayCtx.fill();
       overlayCtx.strokeStyle = "#2563eb";
-      overlayCtx.lineWidth = 4;
+      overlayCtx.lineWidth = 2;
       overlayCtx.stroke();
 
       // Alpha 5.2.9: point numbers deliberately hidden on the photo scan.
@@ -902,8 +902,11 @@
   };
 
   overlay.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
     const point = localPoint(event);
+
+    if (state.mode !== "move") {
+      event.preventDefault();
+    }
 
     if (state.mode === "add-width" || state.mode === "add-height") {
       if (state.closed && state.points.length >= 2) {
@@ -953,6 +956,7 @@
       const pointIndex = nearestIndex(point, state.points, coarse?22:26);
 
       if (socketIndex >= 0 || notchIndex >= 0 || pointIndex >= 0) {
+        event.preventDefault();
         pushHistory();
 
         // Priority remains fittings -> notches -> blue outline points.
