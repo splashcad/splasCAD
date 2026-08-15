@@ -350,7 +350,26 @@ const normaliseFittings = (rawFittings) => {
     });
     if(!duplicate) deduped.push(f);
   }
-  return deduped.slice(0,20);
+  const classified=deduped.map(f=>{
+    const ratio=f.height/Math.max(0.0001,f.width);
+
+    // Real cooker plates are portrait. Override weak AI labels when the
+    // detected outer faceplate is clearly tall.
+    if(ratio>=1.28){
+      return {...f,type:"cooker",orientation:"vertical"};
+    }
+
+    // Clearly landscape plates are double sockets unless the model has
+    // confidently identified something more specific.
+    if((f.width/Math.max(0.0001,f.height))>=1.38 &&
+       ["single","switch"].includes(f.type)){
+      return {...f,type:"double",orientation:"horizontal"};
+    }
+
+    return f;
+  });
+
+  return classified.slice(0,20);
 };
 
 app.post("/api/detect-outline", async (req, res) => {
@@ -440,6 +459,11 @@ CRITICAL WALL-PLANE RULES
 - At each side, stop exactly on the visible wall-turn/junction line.
 - The bottom edge follows ONLY the rear worktop-to-main-wall junction between those limits.
 - The top edge follows ONLY cabinet undersides/extractor geometry on that same front-facing wall plane.
+- BEFORE choosing the raised section, positively identify the actual extractor hood/canopy.
+- The tall central/raised glass section must rise to the TRUE extractor hood area.
+- NEVER mistake a random gap between wall cabinets, cabinet door recess, shelf or open cupboard for the extractor rise.
+- The two vertical sides of the raised section must correspond to the real extractor zone.
+- If the extractor is visibly offset left or right in the photograph, the raised section must also be offset to that real position. Do NOT artificially centre it.
 - Prefer the dominant broad wall plane facing the camera, not narrower angled surfaces at either side.
 - Ignore worktop fronts, doors, handles, appliances, shadows, reflections, black margins and image borders.
 - Use only genuine direction changes; keep shoulders and rises rectilinear.
@@ -447,8 +471,14 @@ CRITICAL WALL-PLANE RULES
 
 Faceplates: detect the tight OUTER rectangle of every visible electrical faceplate ON THAT SAME MAIN FRONT-FACING WALL ONLY.
 Ignore every electrical fitting on a left or right side-return wall, even if clearly visible.
-One physical plate is one detection. Classify single, double, cooker or switch;
-portrait cooker switches are valid. Ignore internal holes, handles, appliances and
+One physical plate is one detection. Classify single, double, cooker or switch.
+ELECTRICAL CLASSIFICATION RULES:
+- A tall portrait faceplate is a COOKER SWITCH unless there is strong visual evidence otherwise.
+- Cooker switch faceplate ≈ 85 x 145 mm, therefore clearly taller than wide.
+- Double socket ≈ 145 x 85 mm, therefore clearly wider than tall.
+- Single socket/switch ≈ 85 x 85 mm, approximately square.
+- Do not label a tall portrait cooker switch as a single switch.
+- Use the OUTER faceplate proportions, not the inner switch/button arrangement. Ignore internal holes, handles, appliances and
 notches. Return normalized centre, width, height, orientation and confidence.
 
 Detection mode: ${String(job.detectionMode || "standard")}
