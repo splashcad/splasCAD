@@ -306,3 +306,6 @@ summary {
 }
 
 .tablet-camera-overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:16px}.tablet-camera-panel{width:min(100%,1000px);display:grid;gap:12px}.tablet-camera-panel video{width:100%;max-height:78vh;object-fit:contain;background:#000;border-radius:14px}.tablet-camera-actions{display:grid;grid-template-columns:1fr 2fr;gap:10px}.tablet-camera-actions button{min-height:54px;font-size:18px}
+
+/* Tablet field scroll fix */
+@media (pointer:coarse){.photo-stage,#photoOverlay{touch-action:pan-y!important;overscroll-behavior-y:contain}#wallPhoto{touch-action:pan-y!important}}
