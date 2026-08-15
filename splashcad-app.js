@@ -1278,6 +1278,90 @@
     };
   };
 
+  const perimeterWithSurveyNotches = (vertices) => {
+    if(!Array.isArray(vertices) || vertices.length<3) return vertices||[];
+    if(!(state.notches||[]).length) return vertices.map(v=>({...v}));
+
+    let perimeter=vertices.map(v=>({...v}));
+
+    // Before exact site measurements are entered, use a small nominal notch
+    // purely to preserve the topology the surveyor created on the photograph.
+    const boundsX=vertices.map(v=>v.x);
+    const boundsY=vertices.map(v=>v.y);
+    const spanX=Math.max(...boundsX)-Math.min(...boundsX);
+    const spanY=Math.max(...boundsY)-Math.min(...boundsY);
+    const nominalWidth=Math.max(8,Math.min(spanX*0.018,28));
+    const nominalDepth=Math.max(8,Math.min(spanY*0.10,22));
+
+    measurementNotchEntries().forEach(({notch,index:notchIndex})=>{
+      const n=scaledNotch(notch);
+      if(!n || !Number.isFinite(n.x) || !Number.isFinite(n.y)) return;
+
+      let best=-1;
+      let bestDistance=Infinity;
+
+      for(let i=0;i<perimeter.length;i++){
+        const a=perimeter[i];
+        const b=perimeter[(i+1)%perimeter.length];
+
+        const horizontal=Math.abs(a.y-b.y)<=Math.max(1,Math.abs(a.x-b.x)*0.04);
+        if(!horizontal) continue;
+
+        const lo=Math.min(a.x,b.x);
+        const hi=Math.max(a.x,b.x);
+
+        if(n.x<lo-nominalWidth || n.x>hi+nominalWidth) continue;
+
+        const distance=Math.abs(n.y-(a.y+b.y)/2);
+        if(distance<bestDistance){
+          bestDistance=distance;
+          best=i;
+        }
+      }
+
+      if(best<0) return;
+
+      const a=perimeter[best];
+      const b=perimeter[(best+1)%perimeter.length];
+      const y=(a.y+b.y)/2;
+
+      // Only cut an upper/top run. Bottom datum edges must never acquire a notch.
+      const bottomY=Math.min(...perimeter.map(v=>v.y));
+      if(Math.abs(y-bottomY)<Math.max(2,spanY*0.04)) return;
+
+      const half=nominalWidth/2;
+      const left=Math.max(Math.min(a.x,b.x)+1,n.x-half);
+      const right=Math.min(Math.max(a.x,b.x)-1,n.x+half);
+      if(!(right>left)) return;
+
+      // Drawing coordinates use positive Y upwards, therefore a notch into the
+      // glass drops DOWN from the top edge.
+      const notchBottom=y-nominalDepth;
+
+      const injected=a.x<=b.x
+        ? [
+            {x:left,y},
+            {x:left,y:notchBottom},
+            {x:right,y:notchBottom},
+            {x:right,y}
+          ]
+        : [
+            {x:right,y},
+            {x:right,y:notchBottom},
+            {x:left,y:notchBottom},
+            {x:left,y}
+          ];
+
+      perimeter=[
+        ...perimeter.slice(0,best+1),
+        ...injected,
+        ...perimeter.slice(best+1)
+      ];
+    });
+
+    return perimeter;
+  };
+
   const exportDxf = () => {
     // The approved scan is the immutable drawing geometry. Measurements annotate
     // this outline; they must never rebuild, replace or distort it.
@@ -2403,7 +2487,10 @@
     // silently replace the surveyor's edited shape with a second perimeter.
     const scannedVertices = scaledPoints();
     const enteredVertices = null;
-    const vertices = scannedVertices;
+
+    // Edited cyan outline + manually placed notch markers together form the
+    // authoritative survey geometry shown on the drawing.
+    const vertices = perimeterWithSurveyNotches(scannedVertices);
 
     if (vertices.length < 3) {
       setStatus($("drawingStatus"), "Select at least three corners first.");
