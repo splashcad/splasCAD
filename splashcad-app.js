@@ -809,13 +809,40 @@
     reader.readAsDataURL(file);
   });
 
+  const localPhotoToJpegFile = async (file) => {
+    const bitmap = await createImageBitmap(file);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext("2d", { alpha: false }).drawImage(bitmap, 0, 0);
+      const blob = await new Promise((resolve, reject) => canvas.toBlob(
+        value => value ? resolve(value) : reject(new Error("Local JPEG conversion failed.")),
+        "image/jpeg",
+        0.92
+      ));
+      return new File([blob], (file.name || "SplashCAD-photo").replace(/\.(heic|heif)$/i, "") + ".jpg", { type: "image/jpeg" });
+    } finally {
+      bitmap.close?.();
+    }
+  };
+
   const isHeicFile = (file) => /^image\/(heic|heif)$/i.test(file?.type || "") || ((!file?.type || file.type === "application/octet-stream") && /\.(heic|heif)$/i.test(file?.name || ""));
 
   const loadPhotoFile = async (file) => {
     if (!file) return;
     try {
-      let imageDataUrl = await fileToDataUrl(file);
       if (isHeicFile(file)) {
+        try { file = await localPhotoToJpegFile(file); } catch {}
+      }
+      let imageDataUrl = await fileToDataUrl(file);
+      const sig = await file.slice(0,8).arrayBuffer();
+      const b = new Uint8Array(sig);
+      const isJpegBytes = b[0]===255 && b[1]===216 && b[2]===255;
+      const isPngBytes = b[0]===137 && b[1]===80 && b[2]===78 && b[3]===71;
+      if (isJpegBytes) imageDataUrl = imageDataUrl.replace(/^data:[^;]+/, "data:image/jpeg");
+      if (isPngBytes) imageDataUrl = imageDataUrl.replace(/^data:[^;]+/, "data:image/png");
+      if (!isJpegBytes && !isPngBytes && isHeicFile(file)) {
         setStatus($("edgeDetectionStatus"), "Converting HEIC photo…");
         const response = await fetch("/api/convert-heic", {
           method: "POST",
