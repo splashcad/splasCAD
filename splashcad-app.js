@@ -2578,8 +2578,8 @@
       (state.productionMeasurements?.stations||[]).every(item=>Number(item.value)>0) &&
       (state.productionMeasurements?.heights||[]).length===drawingMeasurementCounts.heights &&
       (state.productionMeasurements?.heights||[]).every(item=>Number(item.value)>0);
-    const dimensionTopReserve = hasAppliedMeasurements ? 330 : 95;
-    const usableDrawingHeight = hasAppliedMeasurements ? 315 : 550;
+    const dimensionTopReserve = hasAppliedMeasurements ? 325 : 95;
+    const usableDrawingHeight = hasAppliedMeasurements ? 300 : 550;
     const dimensionScale = Math.min(
       900 / (maxX - minX || 1),
       usableDrawingHeight / (maxY - minY || 1)
@@ -3045,85 +3045,151 @@
           return measurementMap({x:Math.max(0,Math.min(W,W*ratio)),y:h});
         };
 
-        const usedInternalLabelRows=[];
+        // HAND-DRAWING DIMENSION LAYOUT
+        // Keep different measurement families in dedicated lanes instead of
+        // letting every height compete for the same automatic row.
+        //
+        // lane 0 = middle/main wall heights
+        // lane 1 = notch heights
+        // lane 2+ = fitting heights, staggered where fittings are close
         let deepestHeightLabelY=bottomLeft.y;
-        const chooseHeightLabelRow=(x,label)=>{
-          drawingCtx.save();
-          drawingCtx.font="900 13px -apple-system, sans-serif";
-          const halfWidth=(drawingCtx.measureText(label).width/2)+9;
-          drawingCtx.restore();
-          for(let rowIndex=0;rowIndex<10;rowIndex++){
-            const ranges=usedInternalLabelRows[rowIndex]||(usedInternalLabelRows[rowIndex]=[]);
-            const left=x-halfWidth,right=x+halfWidth;
-            if(ranges.every(range=>right<range.left-10||left>range.right+10)){
-              ranges.push({left,right});
-              const y=bottomLeft.y+28+(rowIndex*25);
-              deepestHeightLabelY=Math.max(deepestHeightLabelY,y);
-              return y;
-            }
+
+        const featureRank=(feature,type)=>{
+          const list=geomHeightFeatures.filter(f=>f.type===type);
+          return Math.max(0,list.indexOf(feature));
+        };
+
+        const heightLabelPlacement=(feature,anchor,label)=>{
+          let lane=0;
+          let labelX=anchor.x;
+
+          if(feature.type==="notch" || feature.type==="notch-side"){
+            lane=1;
+          } else if(feature.type==="fitting"){
+            const rank=featureRank(feature,"fitting");
+            lane=2+(rank%2);
+
+            // Stagger neighbouring fitting labels horizontally just like the
+            // hand drawing so their vertical witness lines remain readable.
+            const direction=(rank%2===0?-1:1);
+            labelX=anchor.x+(direction*(22+(Math.floor(rank/2)*10)));
+          } else if(feature.type==="measurement-point"){
+            lane=1;
+          } else {
+            // Internal main heights stay directly underneath their area.
+            lane=0;
           }
-          const y=bottomLeft.y+28+(usedInternalLabelRows.length*25);
+
+          const y=bottomLeft.y+34+(lane*34);
           deepestHeightLabelY=Math.max(deepestHeightLabelY,y);
-          return y;
+          return {x:labelX,y};
         };
 
         geomHeightFeatures.forEach((feature,i)=>{
-          const seq=i+1, h=Number(geomHeights[i]); if(!(h>0)) return;
+          const seq=i+1;
+          const h=Number(geomHeights[i]);
+          if(!(h>0)) return;
+
           let anchor=feature.type==="fitting"
             ? fittingAnchor(feature,h)
             : (feature.type==="notch" || feature.type==="notch-side")
               ? notchAnchor(feature,h)
               : outlineAnchor(feature,h);
-          if(!anchor || !Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)) return;
-          drawingCtx.save(); drawingCtx.strokeStyle=hColour; drawingCtx.fillStyle=hColour; drawingCtx.lineWidth=1.6; drawingCtx.font="900 13px -apple-system, sans-serif";
+
+          if(!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
+
+          drawingCtx.save();
+          drawingCtx.strokeStyle=hColour;
+          drawingCtx.fillStyle=hColour;
+          drawingCtx.lineWidth=1.5;
+          drawingCtx.font="900 13px -apple-system, sans-serif";
+
+          // LEFT / RIGHT MAIN HEIGHTS — outside the glass.
           if(feature.type==="outline-y" && feature.outerSide){
             const visualLeft=feature.outerSide==="left";
-            const x=visualLeft?glassLeft-28:glassRight+28;
-            drawingCtx.beginPath(); drawingCtx.moveTo(x,bottomLeft.y); drawingCtx.lineTo(x,anchor.y); drawingCtx.stroke();
-            drawingCtx.beginPath(); drawingCtx.moveTo(x-5,bottomLeft.y); drawingCtx.lineTo(x+5,bottomLeft.y); drawingCtx.moveTo(x-5,anchor.y); drawingCtx.lineTo(x+5,anchor.y); drawingCtx.stroke();
-            drawingCtx.textAlign=visualLeft?"right":"left"; drawingCtx.textBaseline="middle";
-            drawingCtx.fillText(`${seq}  ${Math.round(h)} mm`,x+(visualLeft?-8:8),(bottomLeft.y+anchor.y)/2);
-          } else {
-            const label=`${seq}  ${Math.round(h)} mm`;
-            const row=chooseHeightLabelRow(anchor.x,label);
+            const x=visualLeft ? glassLeft-34 : glassRight+34;
 
-            // Internal heights belong directly underneath the feature.
-            // Use a light witness from the measured feature to the bottom datum,
-            // then continue only as far as its own label row. Do not put text
-            // inside the glass and do not let the line cut through the label.
-            drawingCtx.save();
-            drawingCtx.strokeStyle="#94a3b8";
-            drawingCtx.lineWidth=1;
-            drawingCtx.setLineDash([3,3]);
             drawingCtx.beginPath();
-            drawingCtx.moveTo(anchor.x,anchor.y);
-            drawingCtx.lineTo(anchor.x,bottomLeft.y);
-            drawingCtx.lineTo(anchor.x,row-8);
+            drawingCtx.moveTo(x,bottomLeft.y);
+            drawingCtx.lineTo(x,anchor.y);
             drawingCtx.stroke();
+
+            drawingCtx.beginPath();
+            drawingCtx.moveTo(x-5,bottomLeft.y);
+            drawingCtx.lineTo(x+5,bottomLeft.y);
+            drawingCtx.moveTo(x-5,anchor.y);
+            drawingCtx.lineTo(x+5,anchor.y);
+            drawingCtx.stroke();
+
+            drawingCtx.textAlign=visualLeft?"right":"left";
+            drawingCtx.textBaseline="middle";
+            drawingCtx.fillText(
+              `${seq}  ${Math.round(h)} mm`,
+              x+(visualLeft?-9:9),
+              (bottomLeft.y+anchor.y)/2
+            );
+
             drawingCtx.restore();
-
-            drawingCtx.beginPath();
-            drawingCtx.moveTo(anchor.x-5,anchor.y);
-            drawingCtx.lineTo(anchor.x+5,anchor.y);
-            drawingCtx.moveTo(anchor.x-5,bottomLeft.y);
-            drawingCtx.lineTo(anchor.x+5,bottomLeft.y);
-            drawingCtx.stroke();
-
-            drawingCtx.textAlign="center";
-            drawingCtx.textBaseline="top";
-
-            const tw=drawingCtx.measureText(label).width+10;
-            drawingCtx.fillStyle="#ffffff";
-            drawingCtx.fillRect(anchor.x-tw/2,row-2,tw,18);
-            drawingCtx.fillStyle=hColour;
-            drawingCtx.fillText(label,anchor.x,row);
+            return;
           }
+
+          const label=`${seq}  ${Math.round(h)} mm`;
+          const placement=heightLabelPlacement(feature,anchor,label);
+
+          // Witness line stops at the measured feature.
+          // Below the datum it elbows sideways to the label instead of running
+          // through neighbouring measurements.
+          drawingCtx.save();
+          drawingCtx.strokeStyle="#94a3b8";
+          drawingCtx.lineWidth=1;
+          drawingCtx.setLineDash([3,3]);
+
+          drawingCtx.beginPath();
+          drawingCtx.moveTo(anchor.x,anchor.y);
+          drawingCtx.lineTo(anchor.x,bottomLeft.y);
+
+          if(Math.abs(placement.x-anchor.x)>2){
+            drawingCtx.lineTo(anchor.x,placement.y-9);
+            drawingCtx.lineTo(placement.x,placement.y-9);
+          }else{
+            drawingCtx.lineTo(anchor.x,placement.y-9);
+          }
+
+          drawingCtx.stroke();
+          drawingCtx.restore();
+
+          // Small ticks at actual measured feature and datum.
+          drawingCtx.beginPath();
+          drawingCtx.moveTo(anchor.x-5,anchor.y);
+          drawingCtx.lineTo(anchor.x+5,anchor.y);
+          drawingCtx.moveTo(anchor.x-5,bottomLeft.y);
+          drawingCtx.lineTo(anchor.x+5,bottomLeft.y);
+          drawingCtx.stroke();
+
+          drawingCtx.textAlign="center";
+          drawingCtx.textBaseline="top";
+
+          const textWidth=drawingCtx.measureText(label).width+12;
+
+          // White knockout prevents any witness line or glass outline appearing
+          // through the dimension text.
+          drawingCtx.fillStyle="#ffffff";
+          drawingCtx.fillRect(
+            placement.x-(textWidth/2),
+            placement.y-3,
+            textWidth,
+            20
+          );
+
+          drawingCtx.fillStyle=hColour;
+          drawingCtx.fillText(label,placement.x,placement.y);
+
           drawingCtx.restore();
         });
 
         // The overall width comes after every internal height row. This keeps the
         // cumulative height labels readable even when several fittings are close.
-        const overallY=Math.max(bottomLeft.y+125,deepestHeightLabelY+46);
+        const overallY=Math.max(bottomLeft.y+175,deepestHeightLabelY+48);
         extension(bottomLeft.x,bottomLeft.y,bottomLeft.x,overallY);
         extension(bottomRight.x,bottomRight.y,bottomRight.x,overallY);
         dimLine(bottomLeft.x,overallY,bottomRight.x,overallY,
