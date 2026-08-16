@@ -1,8 +1,8 @@
-const CACHE='splashcad-6-0-22-u011-two-point-manual-20260816174000';
+const CACHE='splashcad-6-0-22-u012-black-margin-scroll-20260816175500';
 const CORE=['/','/index.html','/hob.html','/window.html','/styles.css','/splashcad-app.js','/window-wall.js','/voice.js','/tablet.js','/manifest.webmanifest','/splashcad-icon.svg'];
 const TABLET_PATCH=`
 ;(()=>{
-  const BUILD='ALPHA 6.0.22 · UPDATE 011';
+  const BUILD='ALPHA 6.0.22 · UPDATE 012';
   document.title='SplashCAD — '+BUILD;
   const proof=document.querySelector('.alpha-proof');if(proof)proof.textContent=BUILD;
   const brand=document.querySelector('.brand p');if(brand)brand.textContent=BUILD+' · Locked Detection + Dimension Engine V2';
@@ -18,8 +18,27 @@ const TABLET_PATCH=`
     sidebar.prepend(panel);
   }
 
-  const stage=document.getElementById('photoStage');const scroller=document.querySelector('.main-workspace');
-  if(stage&&scroller){let touch=null;stage.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;const t=e.touches[0];touch={startX:t.clientX,startY:t.clientY,lastY:t.clientY,scrolling:false};},{capture:true,passive:true});stage.addEventListener('touchmove',e=>{if(!touch||e.touches.length!==1)return;const t=e.touches[0],dx=t.clientX-touch.startX,dy=t.clientY-touch.startY;if(!touch.scrolling){if(Math.abs(dy)<12||Math.abs(dy)<=Math.abs(dx))return;touch.scrolling=true;}const delta=t.clientY-touch.lastY;scroller.scrollTop-=delta;touch.lastY=t.clientY;e.preventDefault();e.stopImmediatePropagation();},{capture:true,passive:false});const finish=()=>{touch=null;};stage.addEventListener('touchend',finish,true);stage.addEventListener('touchcancel',finish,true);}
+  const oldStage=document.getElementById('photoStage');const scroller=document.querySelector('.main-workspace');
+  if(oldStage&&scroller){
+    const stage=oldStage.cloneNode(false);
+    while(oldStage.firstChild)stage.appendChild(oldStage.firstChild);
+    oldStage.replaceWith(stage);
+    const photo=document.getElementById('wallPhoto');
+    const insideRenderedPhoto=t=>{
+      if(!photo||!photo.naturalWidth||!photo.naturalHeight)return false;
+      const box=photo.getBoundingClientRect();
+      const imageAspect=photo.naturalWidth/photo.naturalHeight;
+      const boxAspect=box.width/box.height;
+      let w,h,left,top;
+      if(imageAspect>boxAspect){w=box.width;h=w/imageAspect;left=box.left;top=box.top+(box.height-h)/2;}
+      else{h=box.height;w=h*imageAspect;top=box.top;left=box.left+(box.width-w)/2;}
+      return t.clientX>=left&&t.clientX<=left+w&&t.clientY>=top&&t.clientY<=top+h;
+    };
+    let touch=null;
+    stage.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;const t=e.touches[0];touch={startX:t.clientX,startY:t.clientY,lastY:t.clientY,scrolling:false,locked:insideRenderedPhoto(t)};},{capture:true,passive:true});
+    stage.addEventListener('touchmove',e=>{if(!touch||e.touches.length!==1||touch.locked)return;const t=e.touches[0],dx=t.clientX-touch.startX,dy=t.clientY-touch.startY;if(!touch.scrolling){if(Math.abs(dy)<12||Math.abs(dy)<=Math.abs(dx))return;touch.scrolling=true;}const delta=t.clientY-touch.lastY;scroller.scrollTop-=delta;touch.lastY=t.clientY;e.preventDefault();e.stopImmediatePropagation();},{capture:true,passive:false});
+    const finish=()=>{touch=null;};stage.addEventListener('touchend',finish,true);stage.addEventListener('touchcancel',finish,true);
+  }
 
   const drawing=document.getElementById('drawingCanvas');const panel=document.getElementById('productionMeasurementPanel');const widthHost=document.getElementById('measurementSequence');const heightHost=document.getElementById('heightMeasurementSequence');
   if(drawing&&panel&&widthHost&&heightHost){
@@ -48,7 +67,7 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;
   const url=new URL(event.request.url);
   if(url.pathname==='/tablet.js'){
-    event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 011')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
+    event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 012')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
     return;
   }
   event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));
