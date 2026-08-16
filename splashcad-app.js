@@ -81,8 +81,7 @@
 
   const setMode = (mode) => {
     state.mode = mode;
-    $("addWidthModeButton")?.classList.toggle("active", mode === "add-width");
-    $("addHeightModeButton")?.classList.toggle("active", mode === "add-height");
+    $("addOutlinePointModeButton")?.classList.toggle("active", mode === "add-outline");
     $("squareCornerModeButton")?.classList.toggle("active", mode === "square-corner");
     $("moveModeButton").classList.toggle("active", mode === "move");
     ["singleSocketModeButton", "socketModeButton", "cookerSwitchModeButton"].forEach((id) => {
@@ -978,13 +977,12 @@
       event.preventDefault();
     }
 
-    if (state.mode === "add-width" || state.mode === "add-height") {
+    if (state.mode === "add-outline") {
       if (state.closed && state.points.length >= 2) {
         const hit = nearestOutlineSegment(point);
         if (!hit) return;
         pushHistory();
-        const measurementType=state.mode === "add-width" ? "width" : "height";
-        const newPoint={...hit.point,_freeOutlinePoint:true,_measurementType:measurementType};
+        const newPoint={...hit.point,_freeOutlinePoint:true};
         const newIndex=hit.segmentIndex+1;
         state.points.splice(newIndex,0,newPoint);
         redrawOverlay();
@@ -992,8 +990,13 @@
         renderMeasurementSequence();
         renderHeightMeasurementSequence();
         persistWorkingJob();
-        setMode("move");
-        setStatus($("photoStatus"), `Outline point added. Drag the new blue point into position; add more points as needed.`, true);
+        
+setMode("add-outline");
+setStatus(
+  $("photoStatus"),
+  "Point added. Add outline point remains ON.",
+  true
+);
       } else {
         setStatus($("photoStatus"),"Finish the outline before adding a measurement station.",false);
       }
@@ -3960,13 +3963,14 @@
   // Old verification-panel listeners removed in Alpha 5.2.9.
   // Production measurement controls have their own listeners below.
 
-  $("addWidthModeButton")?.addEventListener("click", () => {
-    setMode("add-width");
-    setStatus($("photoStatus"),"Tap the outline edge. The new point will add one width measurement.",true);
-  });
-  $("addHeightModeButton")?.addEventListener("click", () => {
-    setMode("add-height");
-    setStatus($("photoStatus"),"Tap the outline edge. The new point will add one height measurement.",true);
+  
+  $("addOutlinePointModeButton")?.addEventListener("click", () => {
+    setMode("add-outline");
+    setStatus(
+      $("photoStatus"),
+      "Add outline point is ON. Keep tapping to add points; choose Select / move when finished.",
+      true
+    );
   });
   $("squareCornerModeButton")?.addEventListener("click", () => {
     setMode("square-corner");

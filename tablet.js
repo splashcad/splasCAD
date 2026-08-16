@@ -22,9 +22,39 @@
   const oneClickDetectButton=document.getElementById('oneClickDetectButton');
   if(tabletChoosePhotoButton){
     tabletChoosePhotoButton.addEventListener('click',()=>{
-      // Prefer the normal library chooser on tablets; camera remains available
-      // through the browser/file picker if the device offers it.
       (libraryInput||cameraInput)?.click();
+    });
+
+    const showPhotoLoading=()=>{
+      tabletChoosePhotoButton.disabled=true;
+      tabletChoosePhotoButton.textContent='Loading photo…';
+      tabletChoosePhotoButton.classList.add('scan-working');
+    };
+
+    const finishPhotoLoading=()=>{
+      tabletChoosePhotoButton.disabled=false;
+      tabletChoosePhotoButton.textContent='Choose / change photo';
+      tabletChoosePhotoButton.classList.remove('scan-working');
+    };
+
+    libraryInput?.addEventListener('change',()=>{
+      if(!libraryInput.files?.length) return;
+
+      showPhotoLoading();
+
+      const started=Date.now();
+
+      const timer=setInterval(()=>{
+        const photo=document.getElementById('wallPhoto');
+
+        if(
+          (photo?.complete && photo?.naturalWidth>0 && Date.now()-started>500) ||
+          Date.now()-started>60000
+        ){
+          clearInterval(timer);
+          finishPhotoLoading();
+        }
+      },200);
     });
   }
   if(tabletTakePhotoButton){
