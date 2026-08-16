@@ -18,9 +18,11 @@
     #fittingSizePanel[popover] .socket-edit-close{grid-column:1/-1}
     @media (min-width:700px) and (max-width:1400px){
       body.tablet-field-mode{height:100vh;overflow:hidden}
-      body.tablet-field-mode .workspace-shell{height:calc(100vh - 64px);overflow:hidden}
-      body.tablet-field-mode .main-workspace{height:100%;overflow-y:auto;overscroll-behavior:contain;padding-bottom:100px;scrollbar-gutter:stable}
-      body.tablet-field-mode .rightbar{height:100%;max-height:none!important;overflow-y:auto!important;overscroll-behavior:contain;padding-bottom:100px}
+      body.tablet-field-mode .workspace-shell{height:calc(100vh - 64px);overflow:hidden;min-height:0}
+      body.tablet-field-mode .main-workspace{height:100%;min-height:0;overflow-y:scroll!important;overscroll-behavior-y:contain;padding-bottom:100px;scrollbar-gutter:stable;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+      body.tablet-field-mode .rightbar{height:100%;min-height:0;max-height:none!important;overflow-y:scroll!important;overscroll-behavior-y:contain;padding-bottom:100px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+      body.tablet-field-mode .photo-card,body.tablet-field-mode .drawing-card{touch-action:pan-y}
+      body.tablet-field-mode .photo-stage,body.tablet-field-mode #wallPhoto,body.tablet-field-mode #photoOverlay{touch-action:pan-y!important;overscroll-behavior:auto!important}
       body.tablet-field-mode .photo-tool-panel{position:sticky;top:0!important;z-index:35}
       body.tablet-field-mode .tablet-scan-bar{position:sticky;top:0!important;z-index:36}
       body.tablet-field-mode .photo-stage,body.tablet-field-mode #wallPhoto{min-height:68vh!important;max-height:82vh!important}
