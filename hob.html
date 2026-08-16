@@ -9,6 +9,23 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/styles.css?v=20260815152342">
   <title>SplashCAD — ALPHA 6.0.22 · UPDATE 001</title>
+  <style>
+    #fittingSizePanel[popover]{display:none}
+    #fittingSizePanel[popover]:popover-open{display:grid;position:fixed;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,90vw);grid-template-columns:1fr 1fr;gap:10px;padding:18px;border:1px solid #4b6b61;border-radius:14px;background:#0b1714;color:#e7efec;box-shadow:0 24px 80px #000b;z-index:9999}
+    #fittingSizePanel[popover]::backdrop{background:#0009}
+    #fittingSizePanel[popover] strong{grid-column:1/-1;font-size:15px;color:#d1fae5}
+    #fittingSizePanel[popover] label{margin:0}
+    #fittingSizePanel[popover] .socket-edit-close{grid-column:1/-1}
+    @media (min-width:700px) and (max-width:1400px){
+      body.tablet-field-mode{height:100vh;overflow:hidden}
+      body.tablet-field-mode .workspace-shell{height:calc(100vh - 64px);overflow:hidden}
+      body.tablet-field-mode .main-workspace{height:100%;overflow-y:auto;overscroll-behavior:contain;padding-bottom:100px;scrollbar-gutter:stable}
+      body.tablet-field-mode .rightbar{height:100%;max-height:none!important;overflow-y:auto!important;overscroll-behavior:contain;padding-bottom:100px}
+      body.tablet-field-mode .photo-tool-panel{position:sticky;top:0!important;z-index:35}
+      body.tablet-field-mode .tablet-scan-bar{position:sticky;top:0!important;z-index:36}
+      body.tablet-field-mode .photo-stage,body.tablet-field-mode #wallPhoto{min-height:68vh!important;max-height:82vh!important}
+    }
+  </style>
 </head>
 <body>
   <header class="topbar"><div class="alpha-proof">ALPHA 6.0.22 · UPDATE 001</div>
@@ -98,16 +115,18 @@
               <button id="socketModeButton">Double socket</button>
               <button id="cookerSwitchModeButton">Cooker switch</button>
             </div>
+            <button type="button" popovertarget="fittingSizePanel">Socket edit</button>
             <button id="eraseModeButton">Erase selected</button>
             <button id="detectFittingsButton" class="socket-detect-action hidden" aria-hidden="true" tabindex="-1">Detect sockets &amp; switches</button>
           </div>
 
-          <div id="fittingSizePanel" class="fitting-size-panel">
+          <div id="fittingSizePanel" class="fitting-size-panel" popover>
             <strong>Socket edit — select a red fitting</strong>
             <label>W mm <input id="fittingWidthInput" type="number" min="1" inputmode="decimal"></label>
             <label>H mm <input id="fittingHeightInput" type="number" min="1" inputmode="decimal"></label>
             <button id="applyFittingSizeButton">Apply size</button>
             <button id="standardFittingSizeButton">Standard size</button>
+            <button type="button" class="socket-edit-close" popovertarget="fittingSizePanel" popovertargetaction="hide">Close</button>
           </div>
           <div id="fittingDetectionStatus" class="status compact-status">Sockets and switches are detected automatically during Scan outline + sockets.</div>
         </div>
@@ -150,7 +169,6 @@
   </div>
   <div class="measure-group-title">B · HEIGHTS — ALL FROM BOTTOM</div>
   <div id="heightMeasurementSequence" class="measurement-sequence"></div>
-
 
   <div class="production-actions">
     <button id="applyProductionMeasurementsButton" class="primary full">Apply measurements</button>
