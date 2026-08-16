@@ -1640,6 +1640,78 @@
     return features.map((f,i)=>({key:keyFn(f),value:legacy.get(`${legacyPrefix}${i+1}`)??null}));
   };
 
+
+  const notchMeasurementOrientation = (entry) => {
+    const notch=entry?.notch;
+    if(!notch) return "vertical";
+
+    // Extractor shoulder notches are always the approved downward U bite:
+    // TWO widths + ONE height.
+    if(notch.shoulderAuto) return "vertical";
+
+    const pts=state.points||[];
+    if(pts.length<2) return "vertical";
+
+    const nx=Number(notch.x);
+    const ny=Number(notch.y);
+    if(!Number.isFinite(nx)||!Number.isFinite(ny)) return "vertical";
+
+    let nearest=null;
+    let bestDistance=Infinity;
+
+    for(let i=0;i<pts.length;i++){
+      const a=pts[i];
+      const b=pts[(i+1)%pts.length];
+      if(!a||!b) continue;
+
+      const ax=Number(a.x), ay=Number(a.y);
+      const bx=Number(b.x), by=Number(b.y);
+
+      const dx=bx-ax;
+      const dy=by-ay;
+      const len2=dx*dx+dy*dy||1;
+
+      const t=Math.max(0,Math.min(
+        1,
+        ((nx-ax)*dx+(ny-ay)*dy)/len2
+      ));
+
+      const px=ax+t*dx;
+      const py=ay+t*dy;
+      const distance=Math.hypot(nx-px,ny-py);
+
+      if(distance<bestDistance){
+        bestDistance=distance;
+        nearest={dx:Math.abs(dx),dy:Math.abs(dy)};
+      }
+    }
+
+    if(!nearest) return "vertical";
+
+    // Notch sitting on a VERTICAL glass edge cuts horizontally into glass.
+    if(nearest.dy > nearest.dx*1.5) return "horizontal";
+
+    // Notch sitting on a HORIZONTAL glass edge cuts vertically into glass.
+    return "vertical";
+  };
+
+  const horizontalNotchInnerX = (entry) => {
+    const x=Number(entry.notch.x);
+    const xs=(state.points||[])
+      .map(p=>Number(p.x))
+      .filter(Number.isFinite);
+
+    if(!Number.isFinite(x)||!xs.length) return x;
+
+    const minX=Math.min(...xs);
+    const maxX=Math.max(...xs);
+
+    // A horizontal notch comes inward from whichever side edge it is on.
+    return Math.abs(x-minX)<=Math.abs(x-maxX)
+      ? x+7
+      : x-7;
+  };
+
   const widthMeasurementFeatureMap = () => {
     ensureMeasureIds();
     const raw=[];
@@ -1659,10 +1731,44 @@
     const notchEdges=(entry)=>{
       const x=Number(entry.notch.x);
       if(!Number.isFinite(x)) return [];
-      const side=shoulderInfo.find(info=>info.index===entry.index)?.side||null;
+
+      const side=
+        shoulderInfo.find(info=>info.index===entry.index)?.side||null;
+
+      const orientation=notchMeasurementOrientation(entry);
+
+      // HORIZONTAL notch:
+      // one width = position of the inner end of the notch.
+      if(orientation==="horizontal"){
+        return [{
+          type:"notch-edge",
+          notchIndex:entry.index,
+          side,
+          edge:"inner",
+          orientation,
+          x:horizontalNotchInnerX(entry)
+        }];
+      }
+
+      // VERTICAL notch:
+      // two widths = both sides of the notch.
       return [
-        {type:"notch-edge",notchIndex:entry.index,side,edge:"left",x:x-7},
-        {type:"notch-edge",notchIndex:entry.index,side,edge:"right",x:x+7}
+        {
+          type:"notch-edge",
+          notchIndex:entry.index,
+          side,
+          edge:"left",
+          orientation,
+          x:x-7
+        },
+        {
+          type:"notch-edge",
+          notchIndex:entry.index,
+          side,
+          edge:"right",
+          orientation,
+          x:x+7
+        }
       ].sort(datumSort);
     };
 
@@ -1818,15 +1924,50 @@
       }))
       .filter(f=>Number.isFinite(f.x));
 
-    // Every manufacturing notch = TWO widths + ONE height.
+    // NOTCH MEASUREMENT RULE:
+    //
+    // Vertical notch   = TWO widths + ONE height.
+    // Horizontal notch = ONE width + TWO heights.
+    //
+    // Orientation comes from the glass edge the notch sits on.
     const notches=measurementNotchEntries()
-      .map(entry=>({
-        type:"notch",
-        notchIndex:entry.index,
-        x:Number(entry.notch.x),
-        y:Number(entry.notch.y)
-      }))
-      .filter(f=>Number.isFinite(f.x));
+      .flatMap(entry=>{
+        const x=Number(entry.notch.x);
+        const y=Number(entry.notch.y);
+
+        if(!Number.isFinite(x)||!Number.isFinite(y)) return [];
+
+        const orientation=notchMeasurementOrientation(entry);
+
+        if(orientation==="horizontal"){
+          return [
+            {
+              type:"notch-side",
+              notchIndex:entry.index,
+              side:"top",
+              orientation,
+              x,
+              y:y-7
+            },
+            {
+              type:"notch-side",
+              notchIndex:entry.index,
+              side:"bottom",
+              orientation,
+              x,
+              y:y+7
+            }
+          ];
+        }
+
+        return [{
+          type:"notch",
+          notchIndex:entry.index,
+          orientation,
+          x,
+          y
+        }];
+      });
 
     // Build physical left-to-right sequence first.
     let features=[
