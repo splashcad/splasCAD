@@ -1,5 +1,5 @@
 (() => {
-  const BUILD_LABEL='ALPHA 6.0.22 · UPDATE 004';
+  const BUILD_LABEL='ALPHA 6.0.22 · UPDATE 005';
   const button=document.getElementById('tabletModeButton');
   const key='splashcad-tablet-field-mode';
 
@@ -20,6 +20,7 @@
     button.addEventListener('click',()=>apply(!document.body.classList.contains('tablet-field-mode')));
   }
 
+  /* LOCKED TABLET PHOTO / SCAN CONTROLS — DO NOT ALTER DETECTION */
   const tabletChoosePhotoButton=document.getElementById('tabletChoosePhotoButton');
   const tabletTakePhotoButton=document.getElementById('tabletTakePhotoButton');
   const tabletScanButton=document.getElementById('tabletScanButton');
@@ -53,16 +54,16 @@
     tabletTakePhotoButton.addEventListener('click',async()=>{
       if(!navigator.mediaDevices?.getUserMedia){if(cameraInput){cameraInput.accept='image/jpeg';cameraInput.click();}return;}
       let stream;
-      const overlay=document.createElement('div');
-      overlay.className='tablet-camera-overlay';
-      overlay.innerHTML=`<div class="tablet-camera-panel"><video autoplay playsinline muted></video><div class="tablet-camera-actions"><button type="button" class="secondary" data-camera-cancel>Cancel</button><button type="button" class="primary" data-camera-capture>Use photo</button></div></div>`;
-      document.body.appendChild(overlay);
-      const video=overlay.querySelector('video');
-      const close=()=>{try{stream?.getTracks().forEach(t=>t.stop())}catch{}overlay.remove()};
-      overlay.querySelector('[data-camera-cancel]').addEventListener('click',close);
+      const cameraOverlay=document.createElement('div');
+      cameraOverlay.className='tablet-camera-overlay';
+      cameraOverlay.innerHTML=`<div class="tablet-camera-panel"><video autoplay playsinline muted></video><div class="tablet-camera-actions"><button type="button" class="secondary" data-camera-cancel>Cancel</button><button type="button" class="primary" data-camera-capture>Use photo</button></div></div>`;
+      document.body.appendChild(cameraOverlay);
+      const video=cameraOverlay.querySelector('video');
+      const close=()=>{try{stream?.getTracks().forEach(t=>t.stop())}catch{}cameraOverlay.remove()};
+      cameraOverlay.querySelector('[data-camera-cancel]').addEventListener('click',close);
       try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;await video.play();}
       catch(error){close();if(cameraInput){cameraInput.accept='image/jpeg';cameraInput.click();}return;}
-      overlay.querySelector('[data-camera-capture]').addEventListener('click',()=>{
+      cameraOverlay.querySelector('[data-camera-capture]').addEventListener('click',()=>{
         const width=video.videoWidth||1920,height=video.videoHeight||1080;
         const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
         canvas.getContext('2d',{alpha:false}).drawImage(video,0,0,width,height);
@@ -95,10 +96,10 @@
     });
   }
 
-  /* MANUAL DIMENSIONS — UPDATE 004
-     Point capture first: all widths, then all heights.
-     Measurement entry starts only after point capture is complete.
-     Scan/detection and edited outline are untouched. */
+  /* MANUAL DIMENSIONS — UPDATE 005
+     Capture all point pairs first. Enter all widths, then all heights.
+     Rendering follows Hob Wall Dimension Engine V2 visual conventions.
+     This overlay annotates only; it never changes scan, outline or notch geometry. */
   const drawingCanvas=document.getElementById('drawingCanvas');
   const productionPanel=document.getElementById('productionMeasurementPanel');
   const autoWidthSeq=document.getElementById('measurementSequence');
@@ -111,16 +112,20 @@
   if(drawingCanvas&&productionPanel){
     const style=document.createElement('style');
     style.textContent=`
-      .manual-dim-controls{margin:10px 0 12px;padding:10px;border:1px solid rgba(118,255,197,.28);border-radius:10px;background:rgba(8,22,18,.55)}
-      .manual-dim-toggle,.manual-dim-tools{display:flex;gap:7px;flex-wrap:wrap}
-      .manual-dim-toggle button,.manual-dim-tools button{min-height:38px;padding:8px 11px}
+      .manual-dim-controls{margin:8px 0 10px;padding:9px;border:1px solid rgba(118,255,197,.28);border-radius:10px;background:rgba(8,22,18,.55)}
+      .manual-dim-toggle,.manual-dim-tools{display:flex;gap:6px;flex-wrap:wrap}
+      .manual-dim-toggle button,.manual-dim-tools button{min-height:36px;padding:7px 9px}
       .manual-dim-controls button.active{background:#17d99a;color:#04120e;border-color:#17d99a}
-      .manual-dim-help,.manual-dim-status{font-size:12px;opacity:.86;margin:8px 0 0}
-      .manual-dim-entry{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px;align-items:end}
-      .manual-dim-entry label{font-size:12px}.manual-dim-entry input{width:100%}
+      .manual-dim-help,.manual-dim-status{font-size:11px;line-height:1.3;opacity:.86;margin:7px 0 0}
+      .manual-dim-entry{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;margin-top:7px;align-items:end}
+      .manual-dim-entry label{font-size:11px;margin:0}.manual-dim-entry input{width:100%;min-height:38px;font-size:18px;padding:6px 8px}
+      .manual-dim-entry button{min-height:38px;padding:6px 10px}
       .manual-dim-entry[hidden]{display:none!important}
       .manual-dim-overlay{position:absolute;inset:0;width:100%;height:100%;z-index:8;touch-action:none;user-select:none;-webkit-user-select:none}
       .manual-dim-wrap{position:relative}.manual-mode-hidden{display:none!important}
+      .manual-dim-controls.manual-entering .manual-dim-tools,.manual-dim-controls.manual-entering .manual-dim-help{display:none!important}
+      .manual-dim-controls.manual-entering{padding:7px;margin:5px 0}
+      .manual-dim-controls.manual-entering .manual-dim-status{margin-top:4px}
     `;
     document.head.appendChild(style);
 
@@ -140,10 +145,11 @@
       </div>
       <div class="manual-dim-status" hidden></div>
       <div class="manual-dim-entry" hidden>
-        <label><span data-entry-label>Measurement mm</span><input data-manual-value type="number" inputmode="decimal" min="0" step="1" placeholder="Enter measurement"></label>
-        <button type="button" data-manual-apply>Next</button>
+        <label><span data-entry-label>Measurement mm</span><input data-manual-value type="text" inputmode="decimal" autocomplete="off" placeholder="mm"></label>
+        <button type="button" data-manual-voice title="Use SplashCAD voice measuring">🎤 Voice</button>
+        <button type="button" data-manual-apply class="primary">Next</button>
       </div>
-      <div class="manual-dim-help">Touch every width pair first. Then touch every height pair. When all points are placed, press Enter measurements. SplashCAD asks for all widths first, then all heights.</div>`;
+      <div class="manual-dim-help">Touch every width pair first. Then every height pair. Press Enter measurements only when all points are placed. Values are requested widths first, then heights.</div>`;
     productionPanel.querySelector('.help')?.insertAdjacentElement('afterend',controls);
 
     const toolbar=controls.querySelector('.manual-dim-tools');
@@ -152,6 +158,7 @@
     const entryLabel=controls.querySelector('[data-entry-label]');
     const valueInput=controls.querySelector('[data-manual-value]');
     const applyValue=controls.querySelector('[data-manual-apply]');
+    const voiceValue=controls.querySelector('[data-manual-voice]');
     const autoButton=controls.querySelector('[data-dim-mode="auto"]');
     const manualButton=controls.querySelector('[data-dim-mode="manual"]');
 
@@ -159,7 +166,7 @@
     drawingCanvas.parentNode.insertBefore(wrap,drawingCanvas);wrap.appendChild(drawingCanvas);
     const overlay=document.createElement('canvas');overlay.className='manual-dim-overlay';wrap.appendChild(overlay);overlay.hidden=true;
 
-    const storageKey='splashcad-manual-dimensions-v3';
+    const storageKey='splashcad-manual-dimensions-v4';
     let manualActive=false,tool=null,pending=null,entryIndex=-1;
     let dimensions=[];
     try{dimensions=JSON.parse(localStorage.getItem(storageKey)||'[]');if(!Array.isArray(dimensions))dimensions=[];}catch{dimensions=[];}
@@ -175,32 +182,61 @@
     };
     const pointFromEvent=e=>{const r=overlay.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
     const toPx=p=>({x:p.x*overlay.width,y:p.y*overlay.height});
-    const drawArrow=(ctx,x,y,angle)=>{
-      const dpr=Math.max(1,window.devicePixelRatio||1),size=9*dpr;
-      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-size*Math.cos(angle-.45),y-size*Math.sin(angle-.45));ctx.moveTo(x,y);ctx.lineTo(x-size*Math.cos(angle+.45),y-size*Math.sin(angle+.45));ctx.stroke();
+
+    const line=(ctx,x1,y1,x2,y2)=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+    const tickVertical=(ctx,x,y,size)=>line(ctx,x,y-size,x,y+size);
+    const tickHorizontal=(ctx,x,y,size)=>line(ctx,x-size,y,x+size,y);
+    const knockoutText=(ctx,text,x,y,baseline='middle')=>{
+      ctx.textBaseline=baseline;ctx.textAlign='center';
+      const m=ctx.measureText(text),h=18*Math.max(1,window.devicePixelRatio||1);
+      ctx.save();ctx.fillStyle='#fff';ctx.fillRect(x-m.width/2-6,y-h/2,m.width+12,h);ctx.restore();
+      ctx.fillText(text,x,y);
     };
 
     function draw(){
       const ctx=overlay.getContext('2d');ctx.clearRect(0,0,overlay.width,overlay.height);if(!manualActive)return;
-      const dpr=Math.max(1,window.devicePixelRatio||1),red='#d84b4b';
-      ctx.lineWidth=1.5*dpr;ctx.font=`${13*dpr}px Arial, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-      let wi=0,hi=0;
-      dimensions.forEach(d=>{
-        const a=toPx(d.p1),b=toPx(d.p2),mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-        let a2={...a},b2={...b},label={...mid};
-        ctx.strokeStyle=red;ctx.fillStyle=red;ctx.setLineDash([4*dpr,4*dpr]);
-        if(d.type==='width'){
-          wi++;const y=Math.min(a.y,b.y)-(28+((wi-1)%4)*18)*dpr;a2.y=y;b2.y=y;label.y=y-12*dpr;
-          ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(a.x,y);ctx.moveTo(b.x,b.y);ctx.lineTo(b.x,y);ctx.stroke();
-        }else{
-          hi++;const x=Math.max(a.x,b.x)+(30+((hi-1)%4)*18)*dpr;a2.x=x;b2.x=x;label.x=x+24*dpr;
-          ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(x,a.y);ctx.moveTo(b.x,b.y);ctx.lineTo(x,b.y);ctx.stroke();
-        }
-        ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(a2.x,a2.y);ctx.lineTo(b2.x,b2.y);ctx.stroke();
-        const angle=Math.atan2(b2.y-a2.y,b2.x-a2.x);drawArrow(ctx,a2.x,a2.y,angle+Math.PI);drawArrow(ctx,b2.x,b2.y,angle);
-        const n=d.type==='width'?widths().indexOf(d)+1:heights().indexOf(d)+1;
-        ctx.fillText(d.value?`${d.value} mm`:`${d.type==='width'?'W':'H'}${n}`,label.x,label.y);
+      const dpr=Math.max(1,window.devicePixelRatio||1),red='#b91c1c',witness='#94a3b8';
+      ctx.font=`800 ${13*dpr}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+      ctx.lineWidth=1.5*dpr;
+      const entered=dimensions.filter(d=>Number(d.value)>0);
+
+      // Hob Wall width convention: each width gets its own horizontal lane above
+      // the touched features. Witness lines terminate at the touched points.
+      widths().forEach((d,i)=>{
+        const a=toPx(d.p1),b=toPx(d.p2);
+        const top=Math.min(a.y,b.y);
+        const y=Math.max(18*dpr,top-(28+(i*27))*dpr);
+        ctx.strokeStyle=witness;ctx.setLineDash([3*dpr,3*dpr]);ctx.lineWidth=1*dpr;
+        line(ctx,a.x,a.y,a.x,y);line(ctx,b.x,b.y,b.x,y);
+        ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=2*dpr;
+        line(ctx,a.x,y,b.x,y);tickVertical(ctx,a.x,y,5*dpr);tickVertical(ctx,b.x,y,5*dpr);
+        const label=Number(d.value)>0?`${i+1}  ${Math.round(Number(d.value))} mm`:`W${i+1}`;
+        knockoutText(ctx,label,(a.x+b.x)/2,y);
       });
+
+      // Hob Wall height convention: measured feature -> datum witness, then label
+      // below the drawing in dedicated lanes so labels do not cut through glass/notches.
+      heights().forEach((d,i)=>{
+        const a=toPx(d.p1),b=toPx(d.p2);
+        const feature=a.y<b.y?a:b;
+        const datum=a.y<b.y?b:a;
+        const lane=i%3;
+        const labelY=Math.min(overlay.height-18*dpr,Math.max(a.y,b.y)+(34+(lane*34))*dpr);
+        let labelX=feature.x;
+        if(i%2===0&&heights().length>2)labelX-=18*dpr;
+        else if(heights().length>2)labelX+=18*dpr;
+        ctx.strokeStyle=witness;ctx.lineWidth=1*dpr;ctx.setLineDash([3*dpr,3*dpr]);
+        line(ctx,feature.x,feature.y,feature.x,datum.y);
+        line(ctx,feature.x,datum.y,feature.x,labelY-9*dpr);
+        if(Math.abs(labelX-feature.x)>2)line(ctx,feature.x,labelY-9*dpr,labelX,labelY-9*dpr);
+        ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=1.5*dpr;
+        tickHorizontal(ctx,feature.x,feature.y,5*dpr);tickHorizontal(ctx,feature.x,datum.y,5*dpr);
+        const label=Number(d.value)>0?`${i+1}  ${Math.round(Number(d.value))} mm`:`H${i+1}`;
+        knockoutText(ctx,label,labelX,labelY,'top');
+      });
+
+      // Green is used only as a temporary touch marker. It disappears as soon as
+      // the pair is complete and never becomes part of the finished drawing.
       if(pending){const p=toPx(pending);ctx.fillStyle='#17d99a';ctx.beginPath();ctx.arc(p.x,p.y,7*dpr,0,Math.PI*2);ctx.fill();}
     }
 
@@ -208,53 +244,69 @@
       if(!manualActive){status.hidden=true;return;}
       status.hidden=false;
       const w=widths().length,h=heights().length;
-      if(entryIndex>=0){const order=entryOrder(),d=order[entryIndex];status.textContent=d?`Entering measurements: ${entryIndex+1} of ${order.length}`:'Measurements complete';}
-      else if(tool==='width')status.textContent=`Width pairs captured: ${w}. Keep touching width points.`;
-      else if(tool==='height')status.textContent=`Width pairs: ${w} · Height pairs captured: ${h}. Keep touching height points.`;
+      if(entryIndex>=0){const order=entryOrder(),d=order[entryIndex];status.textContent=d?`${d.type==='width'?'Width':'Height'} ${d.type==='width'?widths().indexOf(d)+1:heights().indexOf(d)+1} · ${entryIndex+1} of ${order.length}`:'Measurements complete';}
+      else if(tool==='width')status.textContent=`Width pairs: ${w} · keep touching width points.`;
+      else if(tool==='height')status.textContent=`Widths: ${w} · Height pairs: ${h} · keep touching height points.`;
       else status.textContent=`Width pairs: ${w} · Height pairs: ${h}.`;
     };
+
+    const showEntry=()=>{
+      const order=entryOrder();
+      if(entryIndex<0||entryIndex>=order.length)return;
+      const d=order[entryIndex];
+      const n=d.type==='width'?widths().indexOf(d)+1:heights().indexOf(d)+1;
+      entryLabel.textContent=`${d.type==='width'?'Width':'Height'} ${n} mm`;
+      valueInput.value=d.value||'';
+      entry.hidden=false;controls.classList.add('manual-entering');
+      refreshStatus();
+      setTimeout(()=>{valueInput.focus();valueInput.select?.();entry.scrollIntoView?.({block:'nearest',behavior:'smooth'});},40);
+    };
+
     const setTool=next=>{
-      tool=next;pending=null;entryIndex=-1;entry.hidden=true;valueInput.value='';
+      tool=next;pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');valueInput.value='';
       toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.toggle('active',b.dataset.manualTool===tool));refreshStatus();draw();
     };
     const setManual=active=>{
       manualActive=active;autoButton.classList.toggle('active',!active);manualButton.classList.toggle('active',active);toolbar.hidden=!active;overlay.hidden=!active;
       [autoWidthSeq,autoHeightSeq,directionBlock,productionGrid,countBadge?.closest('.measure-group-title')].forEach(el=>el?.classList.toggle('manual-mode-hidden',active));
-      if(prodStatus)prodStatus.textContent=active?'MANUAL DIMENSIONS — capture all points first, then enter widths followed by heights.':'Measurement count is calculated from the edited splashback.';
-      if(!active){tool=null;pending=null;entryIndex=-1;entry.hidden=true;}refreshStatus();setTimeout(resizeOverlay,50);
+      if(prodStatus)prodStatus.textContent=active?'MANUAL DIMENSIONS — touch all width pairs, all height pairs, then enter widths followed by heights.':'Measurement count is calculated from the edited splashback.';
+      if(!active){tool=null;pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');}refreshStatus();setTimeout(resizeOverlay,50);
     };
 
     controls.querySelectorAll('[data-dim-mode]').forEach(b=>b.addEventListener('click',()=>setManual(b.dataset.dimMode==='manual')));
     toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.addEventListener('click',()=>{
       const next=b.dataset.manualTool;
       if(next==='delete'){
-        if(dimensions.length){dimensions.pop();save();}pending=null;entryIndex=-1;entry.hidden=true;refreshStatus();draw();return;
+        if(dimensions.length){dimensions.pop();save();}pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');refreshStatus();draw();return;
       }
       if(next==='clear'){
-        if(dimensions.length&&confirm('Clear all manually placed dimensions?')){dimensions=[];save();}pending=null;entryIndex=-1;entry.hidden=true;refreshStatus();draw();return;
+        if(dimensions.length&&confirm('Clear all manually placed dimensions?')){dimensions=[];save();}pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');refreshStatus();draw();return;
       }
       if(next==='measure'){
-        const order=entryOrder();
-        if(!order.length)return;
-        entryIndex=0;tool=null;pending=null;toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.remove('active'));
-        const d=order[0],number=d.type==='width'?1:1;entryLabel.textContent=`${d.type==='width'?'Width':'Height'} ${number} mm`;
-        valueInput.value=d.value||'';entry.hidden=false;refreshStatus();setTimeout(()=>valueInput.focus(),30);return;
+        if(!entryOrder().length)return;
+        entryIndex=0;tool=null;pending=null;toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.remove('active'));showEntry();return;
       }
       setTool(next);
     }));
 
     const advanceEntry=()=>{
       const order=entryOrder();if(entryIndex<0||entryIndex>=order.length)return;
-      const d=order[entryIndex],v=Number(valueInput.value);if(!Number.isFinite(v)||v<=0){valueInput.focus();return;}
+      const d=order[entryIndex],v=Number(String(valueInput.value).replace(',','.'));
+      if(!Number.isFinite(v)||v<=0){valueInput.focus();return;}
       d.value=Math.round(v*10)/10;save();draw();entryIndex++;
-      if(entryIndex>=order.length){entryIndex=-1;entry.hidden=true;valueInput.value='';refreshStatus();return;}
-      const next=order[entryIndex];
-      const sameTypeBefore=order.slice(0,entryIndex).filter(x=>x.type===next.type).length;
-      entryLabel.textContent=`${next.type==='width'?'Width':'Height'} ${sameTypeBefore+1} mm`;
-      valueInput.value=next.value||'';refreshStatus();setTimeout(()=>valueInput.focus(),20);
+      if(entryIndex>=order.length){entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');valueInput.value='';refreshStatus();return;}
+      showEntry();
     };
     applyValue.addEventListener('click',advanceEntry);
     valueInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();advanceEntry();}});
+
+    // Reuse the existing SplashCAD voice engine. It already enters a spoken number
+    // into the currently focused field; this button simply starts it for manual entry.
+    voiceValue.addEventListener('click',()=>{
+      valueInput.focus();valueInput.select?.();
+      const voiceButton=document.querySelector('.voice-command-button');
+      if(voiceButton){voiceButton.click();setTimeout(()=>valueInput.focus(),80);}
+    });
 
     overlay.addEventListener('pointerdown',e=>{
       if(!manualActive||entryIndex>=0||(tool!=='width'&&tool!=='height'))return;
