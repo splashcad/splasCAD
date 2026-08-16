@@ -1,8 +1,8 @@
-const CACHE='splashcad-6-0-22-u012-black-margin-scroll-20260816175500';
+const CACHE='splashcad-6-0-22-u013-manual-align-20260816180500';
 const CORE=['/','/index.html','/hob.html','/window.html','/styles.css','/splashcad-app.js','/window-wall.js','/voice.js','/tablet.js','/manifest.webmanifest','/splashcad-icon.svg'];
 const TABLET_PATCH=`
 ;(()=>{
-  const BUILD='ALPHA 6.0.22 · UPDATE 012';
+  const BUILD='ALPHA 6.0.22 · UPDATE 013';
   document.title='SplashCAD — '+BUILD;
   const proof=document.querySelector('.alpha-proof');if(proof)proof.textContent=BUILD;
   const brand=document.querySelector('.brand p');if(brand)brand.textContent=BUILD+' · Locked Detection + Dimension Engine V2';
@@ -56,6 +56,8 @@ const TABLET_PATCH=`
     const rows=()=>{widthHost.innerHTML=widths.map((p,i)=>'<div class="measure-sequence-row"><div class="measure-seq-no">'+(i+1)+'</div><div class="measure-seq-label">Width '+(i+1)+'</div><input class="measure-seq-input pair-measure-input" data-w="'+i+'" inputmode="decimal" placeholder="mm"></div>').join('');heightHost.innerHTML=heights.map((p,i)=>'<div class="measure-sequence-row"><div class="measure-seq-no">'+(i+1)+'</div><div class="measure-seq-label">Height '+(i+1)+'</div><input class="height-seq-input pair-measure-input" data-h="'+i+'" inputmode="decimal" placeholder="mm"></div>').join('');const inputs=[...panel.querySelectorAll('.pair-measure-input')];inputs.forEach((input,i)=>input.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();if(inputs[i+1])inputs[i+1].focus();else input.blur();}));};
     overlay.addEventListener('pointerdown',e=>{if(tool!=='width'&&tool!=='height')return;e.preventDefault();e.stopPropagation();const p=point(e);if(!pending){pending=p;draw();update();return;}const rec={a:pending,b:p,value:null};if(tool==='width')widths.push(rec);else heights.push(rec);pending=null;draw();update();});
     controls.querySelectorAll('[data-pair-tool]').forEach(b=>b.addEventListener('click',()=>{const next=b.dataset.pairTool;if(next==='delete'){pending=null;if(tool==='height'&&heights.length)heights.pop();else if(tool==='width'&&widths.length)widths.pop();else if(heights.length)heights.pop();else widths.pop();draw();update();return;}if(next==='clear'){pending=null;widths=[];heights=[];widthHost.innerHTML='';heightHost.innerHTML='';draw();update();return;}if(next==='enter'){pending=null;tool='enter';controls.querySelectorAll('[data-pair-tool]').forEach(x=>x.classList.remove('active'));rows();update();panel.querySelector('.pair-measure-input')?.focus();return;}pending=null;tool=next;controls.querySelectorAll('[data-pair-tool]').forEach(x=>x.classList.toggle('active',x===b));update();draw();}));
+    const alignDrawing=()=>{const card=drawing.closest('.drawing-card')||drawing.parentElement;if(!scroller||!card)return;const top=card.offsetTop;scroller.scrollTo({top:Math.max(0,top-6),behavior:'smooth'});setTimeout(resize,320);};
+    controls.querySelector('[data-pair-mode="manual"]').addEventListener('click',()=>{setTimeout(alignDrawing,30);});
     controls.querySelector('[data-pair-mode="auto"]').addEventListener('click',()=>location.reload());
     window.addEventListener('resize',resize);new ResizeObserver(resize).observe(drawing);setTimeout(resize,100);update();
   }
@@ -67,7 +69,7 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;
   const url=new URL(event.request.url);
   if(url.pathname==='/tablet.js'){
-    event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 012')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
+    event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 013')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
     return;
   }
   event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));
