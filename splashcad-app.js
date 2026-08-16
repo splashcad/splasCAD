@@ -4232,12 +4232,12 @@
     req.onerror=()=>reject(req.error);
   });
   const persistWorkingJob=async()=>{
-    if(!state?.imageSrc) return;
+    if(!state?.photoDataUrl) return;
     try{
       const db=await openWorkingDB();
       const tx=db.transaction(WORKING_STORE,"readwrite");
       tx.objectStore(WORKING_STORE).put({
-        imageSrc:state.imageSrc, points:state.points||[], manualWidthPoints:state.manualWidthPoints||[], manualHeightPoints:state.manualHeightPoints||[], sockets:state.sockets||[],
+        photoDataUrl:state.photoDataUrl, points:state.points||[], manualWidthPoints:state.manualWidthPoints||[], manualHeightPoints:state.manualHeightPoints||[], sockets:state.sockets||[],
         notches:state.notches||[], shoulderNotches:!!state.shoulderNotches,
         offSquareHeightSections:[], offSquareSquareCorner:state.offSquareSquareCorner||null, squareCornerIndex:state.squareCornerIndex, cornerRadii:state.cornerRadii||{},
         measurementDirection:state.measurementDirection||"ltr",
@@ -4253,8 +4253,12 @@
         const req=db.transaction(WORKING_STORE,"readonly").objectStore(WORKING_STORE).get("job");
         req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
       });
-      if(!saved?.imageSrc) return;
-      state.imageSrc=saved.imageSrc; state.points=saved.points||[]; state.manualWidthPoints=saved.manualWidthPoints||[]; state.manualHeightPoints=saved.manualHeightPoints||[]; state.sockets=saved.sockets||[];
+      // Always restore geometry. Photo is restored separately below.
+      state.points=saved?.points||[];
+      state.manualWidthPoints=saved?.manualWidthPoints||[];
+      state.manualHeightPoints=saved?.manualHeightPoints||[];
+      state.sockets=saved?.sockets||[];
+      state.photoDataUrl=saved?.photoDataUrl||saved?.imageSrc||null;
       state.notches=saved.notches||[]; state.shoulderNotches=!!saved.shoulderNotches;
       state.offSquareHeightSections=[]; state.offSquareSquareCorner=saved.offSquareSquareCorner||null;
       state.squareCornerIndex=Number.isInteger(Number(saved.squareCornerIndex))?Number(saved.squareCornerIndex):null;
@@ -4262,13 +4266,44 @@
       state.measurementDirection=saved.measurementDirection||"ltr";
       state.productionModificationsApplied=!!saved.productionModificationsApplied;
       state.productionMeasurements={...state.productionMeasurements,...(saved.productionMeasurements||{})};
-      const img=new Image();
-      img.onload=()=>{
-        state.image=img;
-        const photo=$("photo"); if(photo) photo.src=saved.imageSrc;
-        redrawOverlay(); renderMeasurementSequence(); renderHeightMeasurementSequence(); renderAdvancedGeometryControls(); generateDrawing();
+      const finishRestore=()=>{
+        redrawOverlay();
+        renderMeasurementSequence();
+        renderHeightMeasurementSequence();
+        renderAdvancedGeometryControls();
+        generateDrawing();
       };
-      img.src=saved.imageSrc;
+
+      if(state.photoDataUrl){
+        const img=new Image();
+
+        img.onload=()=>{
+          state.image=img;
+
+          // Main application image element is wallPhoto.
+          if(photo){
+            photo.onload=()=>{
+              requestAnimationFrame(resizeOverlay);
+              finishRestore();
+            };
+            photo.src=state.photoDataUrl;
+          }else{
+            finishRestore();
+          }
+        };
+
+        img.onerror=()=>{
+          // Never destroy a recovered edited outline because the old
+          // photograph reference is invalid.
+          console.warn("Saved photo could not be restored; geometry retained.");
+          state.photoDataUrl=null;
+          finishRestore();
+        };
+
+        img.src=state.photoDataUrl;
+      }else{
+        finishRestore();
+      }
     }catch(err){ console.warn("Working job restore failed",err); }
   };
 
@@ -4303,4 +4338,4 @@ window.addEventListener("resize", () => {
 })();
 
 setTimeout(()=>{ renderHeightMeasurementSequence(); },150);
-setInterval(()=>{ if(state?.imageSrc) persistWorkingJob(); },10000);
+setInterval(()=>{ if(state?.photoDataUrl) persistWorkingJob(); },10000);
