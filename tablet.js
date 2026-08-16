@@ -1,5 +1,5 @@
 (() => {
-  const BUILD_LABEL='ALPHA 6.0.22 · UPDATE 005';
+  const BUILD_LABEL='ALPHA 6.0.22 · UPDATE 006';
   const button=document.getElementById('tabletModeButton');
   const key='splashcad-tablet-field-mode';
 
@@ -96,20 +96,21 @@
     });
   }
 
-  /* MANUAL DIMENSIONS — UPDATE 005
-     Capture all point pairs first. Enter all widths, then all heights.
-     Rendering follows Hob Wall Dimension Engine V2 visual conventions.
-     This overlay annotates only; it never changes scan, outline or notch geometry. */
+  /* MANUAL DIMENSIONS — UPDATE 006
+     ONE tap = ONE measurement station.
+     Width datum comes from selected left/right side.
+     Height datum is always the bottom.
+     Numbers are entered in normal Hob Wall-style rows: widths first, heights second.
+     Scan/detection and outline geometry remain untouched. */
   const drawingCanvas=document.getElementById('drawingCanvas');
   const productionPanel=document.getElementById('productionMeasurementPanel');
-  const autoWidthSeq=document.getElementById('measurementSequence');
-  const autoHeightSeq=document.getElementById('heightMeasurementSequence');
-  const directionBlock=document.querySelector('.measure-direction');
+  const widthHost=document.getElementById('measurementSequence');
+  const heightHost=document.getElementById('heightMeasurementSequence');
   const productionGrid=document.querySelector('.production-grid');
   const countBadge=document.getElementById('measurementCountBadge');
   const prodStatus=document.getElementById('productionMeasurementStatus');
 
-  if(drawingCanvas&&productionPanel){
+  if(drawingCanvas&&productionPanel&&widthHost&&heightHost){
     const style=document.createElement('style');
     style.textContent=`
       .manual-dim-controls{margin:8px 0 10px;padding:9px;border:1px solid rgba(118,255,197,.28);border-radius:10px;background:rgba(8,22,18,.55)}
@@ -117,15 +118,15 @@
       .manual-dim-toggle button,.manual-dim-tools button{min-height:36px;padding:7px 9px}
       .manual-dim-controls button.active{background:#17d99a;color:#04120e;border-color:#17d99a}
       .manual-dim-help,.manual-dim-status{font-size:11px;line-height:1.3;opacity:.86;margin:7px 0 0}
-      .manual-dim-entry{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;margin-top:7px;align-items:end}
-      .manual-dim-entry label{font-size:11px;margin:0}.manual-dim-entry input{width:100%;min-height:38px;font-size:18px;padding:6px 8px}
-      .manual-dim-entry button{min-height:38px;padding:6px 10px}
-      .manual-dim-entry[hidden]{display:none!important}
       .manual-dim-overlay{position:absolute;inset:0;width:100%;height:100%;z-index:8;touch-action:none;user-select:none;-webkit-user-select:none}
-      .manual-dim-wrap{position:relative}.manual-mode-hidden{display:none!important}
-      .manual-dim-controls.manual-entering .manual-dim-tools,.manual-dim-controls.manual-entering .manual-dim-help{display:none!important}
-      .manual-dim-controls.manual-entering{padding:7px;margin:5px 0}
-      .manual-dim-controls.manual-entering .manual-dim-status{margin-top:4px}
+      .manual-dim-wrap{position:relative}
+      .manual-mode-hidden{display:none!important}
+      .manual-station-dot{pointer-events:none}
+      body.manual-keyboard-open .photo-card{display:none!important}
+      body.manual-keyboard-open .drawing-card{margin-top:0!important}
+      body.manual-keyboard-open .production-drawing-card{display:none!important}
+      body.manual-keyboard-open .main-workspace{align-self:start!important}
+      @media (orientation:landscape){body.manual-keyboard-open .drawing-card canvas{max-height:42vh!important}}
     `;
     document.head.appendChild(style);
 
@@ -139,183 +140,212 @@
       <div class="manual-dim-tools" hidden>
         <button type="button" data-manual-tool="width">1 · Touch all width points</button>
         <button type="button" data-manual-tool="height">2 · Touch all height points</button>
-        <button type="button" data-manual-tool="measure">3 · Enter measurements</button>
-        <button type="button" data-manual-tool="delete">Delete last pair</button>
+        <button type="button" data-manual-tool="enter">3 · Enter measurements</button>
+        <button type="button" data-manual-tool="delete">Delete last point</button>
         <button type="button" data-manual-tool="clear">Clear manual dims</button>
       </div>
       <div class="manual-dim-status" hidden></div>
-      <div class="manual-dim-entry" hidden>
-        <label><span data-entry-label>Measurement mm</span><input data-manual-value type="text" inputmode="decimal" autocomplete="off" placeholder="mm"></label>
-        <button type="button" data-manual-voice title="Use SplashCAD voice measuring">🎤 Voice</button>
-        <button type="button" data-manual-apply class="primary">Next</button>
-      </div>
-      <div class="manual-dim-help">Touch every width pair first. Then every height pair. Press Enter measurements only when all points are placed. Values are requested widths first, then heights.</div>`;
+      <div class="manual-dim-help">One tap is one station. Touch every width point first, then every height point. Enter measurements afterwards: all widths first, then all heights. Voice works through the normal Voice measure control.</div>`;
     productionPanel.querySelector('.help')?.insertAdjacentElement('afterend',controls);
 
     const toolbar=controls.querySelector('.manual-dim-tools');
     const status=controls.querySelector('.manual-dim-status');
-    const entry=controls.querySelector('.manual-dim-entry');
-    const entryLabel=controls.querySelector('[data-entry-label]');
-    const valueInput=controls.querySelector('[data-manual-value]');
-    const applyValue=controls.querySelector('[data-manual-apply]');
-    const voiceValue=controls.querySelector('[data-manual-voice]');
     const autoButton=controls.querySelector('[data-dim-mode="auto"]');
     const manualButton=controls.querySelector('[data-dim-mode="manual"]');
 
-    const wrap=document.createElement('div');wrap.className='manual-dim-wrap';
-    drawingCanvas.parentNode.insertBefore(wrap,drawingCanvas);wrap.appendChild(drawingCanvas);
-    const overlay=document.createElement('canvas');overlay.className='manual-dim-overlay';wrap.appendChild(overlay);overlay.hidden=true;
+    const wrap=document.createElement('div');
+    wrap.className='manual-dim-wrap';
+    drawingCanvas.parentNode.insertBefore(wrap,drawingCanvas);
+    wrap.appendChild(drawingCanvas);
+    const overlay=document.createElement('canvas');
+    overlay.className='manual-dim-overlay';
+    wrap.appendChild(overlay);
+    overlay.hidden=true;
 
-    const storageKey='splashcad-manual-dimensions-v4';
-    let manualActive=false,tool=null,pending=null,entryIndex=-1;
-    let dimensions=[];
-    try{dimensions=JSON.parse(localStorage.getItem(storageKey)||'[]');if(!Array.isArray(dimensions))dimensions=[];}catch{dimensions=[];}
-    const save=()=>localStorage.setItem(storageKey,JSON.stringify(dimensions));
-    const widths=()=>dimensions.filter(d=>d.type==='width');
-    const heights=()=>dimensions.filter(d=>d.type==='height');
-    const entryOrder=()=>[...widths(),...heights()];
+    const storageKey='splashcad-manual-stations-v1';
+    let active=false,tool=null;
+    let widths=[],heights=[];
+    try{
+      const saved=JSON.parse(localStorage.getItem(storageKey)||'{}');
+      widths=Array.isArray(saved.widths)?saved.widths:[];
+      heights=Array.isArray(saved.heights)?saved.heights:[];
+    }catch{}
+    const save=()=>localStorage.setItem(storageKey,JSON.stringify({widths,heights}));
 
     const resizeOverlay=()=>{
       const r=drawingCanvas.getBoundingClientRect(),dpr=Math.max(1,window.devicePixelRatio||1);
-      overlay.width=Math.max(1,Math.round(r.width*dpr));overlay.height=Math.max(1,Math.round(r.height*dpr));
-      overlay.style.width=`${r.width}px`;overlay.style.height=`${r.height}px`;draw();
+      overlay.width=Math.max(1,Math.round(r.width*dpr));
+      overlay.height=Math.max(1,Math.round(r.height*dpr));
+      overlay.style.width=`${r.width}px`;overlay.style.height=`${r.height}px`;
+      drawOverlay();
     };
-    const pointFromEvent=e=>{const r=overlay.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
-    const toPx=p=>({x:p.x*overlay.width,y:p.y*overlay.height});
+    const pointFromEvent=e=>{
+      const r=overlay.getBoundingClientRect();
+      return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};
+    };
+    const px=p=>({x:p.x*overlay.width,y:p.y*overlay.height});
+
+    const glassBounds=()=>{
+      const ctx=drawingCanvas.getContext('2d',{willReadFrequently:true});
+      const w=drawingCanvas.width,h=drawingCanvas.height;
+      try{
+        const data=ctx.getImageData(0,0,w,h).data;
+        let minX=w,maxX=0,minY=h,maxY=0,found=0;
+        const step=Math.max(3,Math.floor(w/420));
+        for(let y=0;y<h;y+=step){
+          for(let x=0;x<w;x+=step){
+            const i=(y*w+x)*4,r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+            if(a<20)continue;
+            const nearWhite=r>243&&g>243&&b>243;
+            const likelyGlass=!nearWhite&&r>155&&g>165&&b>170&&Math.abs(g-b)<45;
+            if(likelyGlass){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);found++;}
+          }
+        }
+        if(found>20)return{left:minX,right:maxX,top:minY,bottom:maxY};
+      }catch{}
+      return{left:w*.16,right:w*.78,top:h*.18,bottom:h*.72};
+    };
 
     const line=(ctx,x1,y1,x2,y2)=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
-    const tickVertical=(ctx,x,y,size)=>line(ctx,x,y-size,x,y+size);
-    const tickHorizontal=(ctx,x,y,size)=>line(ctx,x-size,y,x+size,y);
-    const knockoutText=(ctx,text,x,y,baseline='middle')=>{
-      ctx.textBaseline=baseline;ctx.textAlign='center';
-      const m=ctx.measureText(text),h=18*Math.max(1,window.devicePixelRatio||1);
-      ctx.save();ctx.fillStyle='#fff';ctx.fillRect(x-m.width/2-6,y-h/2,m.width+12,h);ctx.restore();
+    const knockout=(ctx,text,x,y,baseline='middle')=>{
+      ctx.textAlign='center';ctx.textBaseline=baseline;
+      const m=ctx.measureText(text),hh=19*Math.max(1,window.devicePixelRatio||1);
+      ctx.save();ctx.fillStyle='#fff';ctx.fillRect(x-m.width/2-6,y-hh/2,m.width+12,hh);ctx.restore();
       ctx.fillText(text,x,y);
     };
 
-    function draw(){
-      const ctx=overlay.getContext('2d');ctx.clearRect(0,0,overlay.width,overlay.height);if(!manualActive)return;
-      const dpr=Math.max(1,window.devicePixelRatio||1),red='#b91c1c',witness='#94a3b8';
+    function drawOverlay(){
+      const ctx=overlay.getContext('2d');
+      ctx.clearRect(0,0,overlay.width,overlay.height);
+      if(!active)return;
+      const dpr=Math.max(1,window.devicePixelRatio||1),red='#b91c1c',witness='#94a3b8',green='#17d99a';
+      const b=glassBounds();
+      const sx=overlay.width/drawingCanvas.width,sy=overlay.height/drawingCanvas.height;
+      const bounds={left:b.left*sx,right:b.right*sx,top:b.top*sy,bottom:b.bottom*sy};
+      const dir=document.querySelector('input[name="measureDirection"]:checked')?.value||'ltr';
+      const datumX=dir==='rtl'?bounds.right:bounds.left;
       ctx.font=`800 ${13*dpr}px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
-      ctx.lineWidth=1.5*dpr;
-      const entered=dimensions.filter(d=>Number(d.value)>0);
 
-      // Hob Wall width convention: each width gets its own horizontal lane above
-      // the touched features. Witness lines terminate at the touched points.
-      widths().forEach((d,i)=>{
-        const a=toPx(d.p1),b=toPx(d.p2);
-        const top=Math.min(a.y,b.y);
-        const y=Math.max(18*dpr,top-(28+(i*27))*dpr);
-        ctx.strokeStyle=witness;ctx.setLineDash([3*dpr,3*dpr]);ctx.lineWidth=1*dpr;
-        line(ctx,a.x,a.y,a.x,y);line(ctx,b.x,b.y,b.x,y);
-        ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=2*dpr;
-        line(ctx,a.x,y,b.x,y);tickVertical(ctx,a.x,y,5*dpr);tickVertical(ctx,b.x,y,5*dpr);
-        const label=Number(d.value)>0?`${i+1}  ${Math.round(Number(d.value))} mm`:`W${i+1}`;
-        knockoutText(ctx,label,(a.x+b.x)/2,y);
-      });
-
-      // Hob Wall height convention: measured feature -> datum witness, then label
-      // below the drawing in dedicated lanes so labels do not cut through glass/notches.
-      heights().forEach((d,i)=>{
-        const a=toPx(d.p1),b=toPx(d.p2);
-        const feature=a.y<b.y?a:b;
-        const datum=a.y<b.y?b:a;
-        const lane=i%3;
-        const labelY=Math.min(overlay.height-18*dpr,Math.max(a.y,b.y)+(34+(lane*34))*dpr);
-        let labelX=feature.x;
-        if(i%2===0&&heights().length>2)labelX-=18*dpr;
-        else if(heights().length>2)labelX+=18*dpr;
+      widths.forEach((p,i)=>{
+        const q=px(p),laneY=Math.max(18*dpr,bounds.top-(30+i*27)*dpr);
         ctx.strokeStyle=witness;ctx.lineWidth=1*dpr;ctx.setLineDash([3*dpr,3*dpr]);
-        line(ctx,feature.x,feature.y,feature.x,datum.y);
-        line(ctx,feature.x,datum.y,feature.x,labelY-9*dpr);
-        if(Math.abs(labelX-feature.x)>2)line(ctx,feature.x,labelY-9*dpr,labelX,labelY-9*dpr);
-        ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=1.5*dpr;
-        tickHorizontal(ctx,feature.x,feature.y,5*dpr);tickHorizontal(ctx,feature.x,datum.y,5*dpr);
-        const label=Number(d.value)>0?`${i+1}  ${Math.round(Number(d.value))} mm`:`H${i+1}`;
-        knockoutText(ctx,label,labelX,labelY,'top');
+        line(ctx,datumX,bounds.top,datumX,laneY);line(ctx,q.x,q.y,q.x,laneY);
+        ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=2*dpr;
+        line(ctx,datumX,laneY,q.x,laneY);
+        line(ctx,datumX,laneY-5*dpr,datumX,laneY+5*dpr);line(ctx,q.x,laneY-5*dpr,q.x,laneY+5*dpr);
+        const v=Number(p.value),label=v>0?`${i+1}  ${Math.round(v)} mm`:`W${i+1}`;
+        knockout(ctx,label,(datumX+q.x)/2,laneY);
       });
 
-      // Green is used only as a temporary touch marker. It disappears as soon as
-      // the pair is complete and never becomes part of the finished drawing.
-      if(pending){const p=toPx(pending);ctx.fillStyle='#17d99a';ctx.beginPath();ctx.arc(p.x,p.y,7*dpr,0,Math.PI*2);ctx.fill();}
+      heights.forEach((p,i)=>{
+        const q=px(p),outer=Math.abs(q.x-bounds.left)<26*dpr||Math.abs(q.x-bounds.right)<26*dpr;
+        ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=1.5*dpr;
+        if(outer){
+          const left=Math.abs(q.x-bounds.left)<=Math.abs(q.x-bounds.right);
+          const x=left?bounds.left-34*dpr:bounds.right+34*dpr;
+          line(ctx,x,bounds.bottom,x,q.y);
+          line(ctx,x-5*dpr,bounds.bottom,x+5*dpr,bounds.bottom);line(ctx,x-5*dpr,q.y,x+5*dpr,q.y);
+          ctx.textAlign=left?'right':'left';ctx.textBaseline='middle';
+          const v=Number(p.value),label=v>0?`${i+1}  ${Math.round(v)} mm`:`H${i+1}`;
+          ctx.fillText(label,x+(left?-9:9)*dpr,(bounds.bottom+q.y)/2);
+        }else{
+          const lane=i%3,labelY=Math.min(overlay.height-20*dpr,bounds.bottom+(36+lane*34)*dpr);
+          let labelX=q.x;if(heights.length>2)labelX+=((i%2)?22:-22)*dpr;
+          ctx.strokeStyle=witness;ctx.lineWidth=1*dpr;ctx.setLineDash([3*dpr,3*dpr]);
+          line(ctx,q.x,q.y,q.x,bounds.bottom);line(ctx,q.x,bounds.bottom,q.x,labelY-9*dpr);
+          if(Math.abs(labelX-q.x)>2)line(ctx,q.x,labelY-9*dpr,labelX,labelY-9*dpr);
+          ctx.setLineDash([]);ctx.strokeStyle=red;ctx.fillStyle=red;ctx.lineWidth=1.5*dpr;
+          line(ctx,q.x-5*dpr,q.y,q.x+5*dpr,q.y);line(ctx,q.x-5*dpr,bounds.bottom,q.x+5*dpr,bounds.bottom);
+          const v=Number(p.value),label=v>0?`${i+1}  ${Math.round(v)} mm`:`H${i+1}`;
+          knockout(ctx,label,labelX,labelY,'top');
+        }
+      });
+
+      const dots=tool==='width'?widths:tool==='height'?heights:[];
+      dots.forEach(p=>{const q=px(p);ctx.fillStyle=green;ctx.beginPath();ctx.arc(q.x,q.y,5*dpr,0,Math.PI*2);ctx.fill();});
     }
 
-    const refreshStatus=()=>{
-      if(!manualActive){status.hidden=true;return;}
+    const updateStatus=()=>{
+      if(!active){status.hidden=true;return;}
       status.hidden=false;
-      const w=widths().length,h=heights().length;
-      if(entryIndex>=0){const order=entryOrder(),d=order[entryIndex];status.textContent=d?`${d.type==='width'?'Width':'Height'} ${d.type==='width'?widths().indexOf(d)+1:heights().indexOf(d)+1} · ${entryIndex+1} of ${order.length}`:'Measurements complete';}
-      else if(tool==='width')status.textContent=`Width pairs: ${w} · keep touching width points.`;
-      else if(tool==='height')status.textContent=`Widths: ${w} · Height pairs: ${h} · keep touching height points.`;
-      else status.textContent=`Width pairs: ${w} · Height pairs: ${h}.`;
+      status.textContent=tool==='width'?`Width points: ${widths.length}. Keep touching every width station.`:
+        tool==='height'?`Width points: ${widths.length} · Height points: ${heights.length}. Keep touching every height station.`:
+        `Width points: ${widths.length} · Height points: ${heights.length}.`;
+      if(countBadge)countBadge.textContent=`Manual: ${widths.length} widths · ${heights.length} heights`;
     };
 
-    const showEntry=()=>{
-      const order=entryOrder();
-      if(entryIndex<0||entryIndex>=order.length)return;
-      const d=order[entryIndex];
-      const n=d.type==='width'?widths().indexOf(d)+1:heights().indexOf(d)+1;
-      entryLabel.textContent=`${d.type==='width'?'Width':'Height'} ${n} mm`;
-      valueInput.value=d.value||'';
-      entry.hidden=false;controls.classList.add('manual-entering');
-      refreshStatus();
-      setTimeout(()=>{valueInput.focus();valueInput.select?.();entry.scrollIntoView?.({block:'nearest',behavior:'smooth'});},40);
+    const renderEntryRows=()=>{
+      widthHost.innerHTML=widths.map((p,i)=>`<div class="measure-sequence-row"><div class="measure-seq-no">${i+1}</div><div class="measure-seq-label">Width ${i+1}</div><input class="measure-seq-input manual-measure-input" data-manual-width="${i}" type="text" inputmode="decimal" autocomplete="off" value="${p.value??''}" placeholder="mm"></div>`).join('');
+      heightHost.innerHTML=heights.map((p,i)=>`<div class="measure-sequence-row"><div class="measure-seq-no">${i+1}</div><div class="measure-seq-label">Height ${i+1}</div><input class="height-seq-input manual-measure-input" data-entry-order="height" data-manual-height="${i}" type="text" inputmode="decimal" autocomplete="off" value="${p.value??''}" placeholder="mm"></div>`).join('');
+      const inputs=[...productionPanel.querySelectorAll('.manual-measure-input')];
+      inputs.forEach((input,idx)=>{
+        input.addEventListener('input',()=>{
+          const v=Number(String(input.value).replace(',','.'));
+          if(input.dataset.manualWidth!==undefined)widths[Number(input.dataset.manualWidth)].value=Number.isFinite(v)&&v>0?v:null;
+          if(input.dataset.manualHeight!==undefined)heights[Number(input.dataset.manualHeight)].value=Number.isFinite(v)&&v>0?v:null;
+          save();drawOverlay();
+        });
+        input.addEventListener('focus',()=>{
+          document.body.classList.add('manual-keyboard-open');
+          setTimeout(()=>drawingCanvas.scrollIntoView({block:'start',behavior:'smooth'}),80);
+        });
+        input.addEventListener('blur',()=>setTimeout(()=>{
+          if(!productionPanel.contains(document.activeElement)||!document.activeElement?.classList?.contains('manual-measure-input'))document.body.classList.remove('manual-keyboard-open');
+        },180));
+        input.addEventListener('keydown',e=>{
+          if(e.key!=='Enter')return;
+          e.preventDefault();
+          const next=inputs[idx+1];
+          if(next){next.focus();next.select?.();}else{input.blur();document.getElementById('applyProductionMeasurementsButton')?.focus();}
+        });
+      });
     };
 
     const setTool=next=>{
-      tool=next;pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');valueInput.value='';
-      toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.toggle('active',b.dataset.manualTool===tool));refreshStatus();draw();
+      tool=next;
+      toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.toggle('active',b.dataset.manualTool===tool));
+      updateStatus();drawOverlay();
     };
-    const setManual=active=>{
-      manualActive=active;autoButton.classList.toggle('active',!active);manualButton.classList.toggle('active',active);toolbar.hidden=!active;overlay.hidden=!active;
-      [autoWidthSeq,autoHeightSeq,directionBlock,productionGrid,countBadge?.closest('.measure-group-title')].forEach(el=>el?.classList.toggle('manual-mode-hidden',active));
-      if(prodStatus)prodStatus.textContent=active?'MANUAL DIMENSIONS — touch all width pairs, all height pairs, then enter widths followed by heights.':'Measurement count is calculated from the edited splashback.';
-      if(!active){tool=null;pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');}refreshStatus();setTimeout(resizeOverlay,50);
+
+    const setManual=on=>{
+      active=on;
+      autoButton.classList.toggle('active',!on);manualButton.classList.toggle('active',on);toolbar.hidden=!on;overlay.hidden=!on;
+      productionGrid?.classList.toggle('manual-mode-hidden',on);
+      if(on){renderEntryRows();if(prodStatus)prodStatus.textContent='MANUAL DIMENSIONS — touch width stations, then height stations; enter widths first, then heights.';}
+      else{document.body.classList.remove('manual-keyboard-open');location.reload();return;}
+      updateStatus();setTimeout(resizeOverlay,50);
     };
 
     controls.querySelectorAll('[data-dim-mode]').forEach(b=>b.addEventListener('click',()=>setManual(b.dataset.dimMode==='manual')));
     toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.addEventListener('click',()=>{
       const next=b.dataset.manualTool;
       if(next==='delete'){
-        if(dimensions.length){dimensions.pop();save();}pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');refreshStatus();draw();return;
+        if(tool==='height'&&heights.length)heights.pop();else if(tool==='width'&&widths.length)widths.pop();else if(heights.length)heights.pop();else widths.pop();
+        save();renderEntryRows();updateStatus();drawOverlay();return;
       }
       if(next==='clear'){
-        if(dimensions.length&&confirm('Clear all manually placed dimensions?')){dimensions=[];save();}pending=null;entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');refreshStatus();draw();return;
+        if((widths.length||heights.length)&&confirm('Clear all manual measurement points?')){widths=[];heights=[];save();renderEntryRows();updateStatus();drawOverlay();}return;
       }
-      if(next==='measure'){
-        if(!entryOrder().length)return;
-        entryIndex=0;tool=null;pending=null;toolbar.querySelectorAll('[data-manual-tool]').forEach(b=>b.classList.remove('active'));showEntry();return;
+      if(next==='enter'){
+        tool=null;renderEntryRows();updateStatus();drawOverlay();
+        const first=productionPanel.querySelector('.manual-measure-input');if(first){first.focus();first.select?.();}return;
       }
       setTool(next);
     }));
 
-    const advanceEntry=()=>{
-      const order=entryOrder();if(entryIndex<0||entryIndex>=order.length)return;
-      const d=order[entryIndex],v=Number(String(valueInput.value).replace(',','.'));
-      if(!Number.isFinite(v)||v<=0){valueInput.focus();return;}
-      d.value=Math.round(v*10)/10;save();draw();entryIndex++;
-      if(entryIndex>=order.length){entryIndex=-1;entry.hidden=true;controls.classList.remove('manual-entering');valueInput.value='';refreshStatus();return;}
-      showEntry();
-    };
-    applyValue.addEventListener('click',advanceEntry);
-    valueInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();advanceEntry();}});
-
-    // Reuse the existing SplashCAD voice engine. It already enters a spoken number
-    // into the currently focused field; this button simply starts it for manual entry.
-    voiceValue.addEventListener('click',()=>{
-      valueInput.focus();valueInput.select?.();
-      const voiceButton=document.querySelector('.voice-command-button');
-      if(voiceButton){voiceButton.click();setTimeout(()=>valueInput.focus(),80);}
-    });
-
     overlay.addEventListener('pointerdown',e=>{
-      if(!manualActive||entryIndex>=0||(tool!=='width'&&tool!=='height'))return;
-      e.preventDefault();e.stopPropagation();const p=pointFromEvent(e);
-      if(!pending){pending=p;draw();return;}
-      dimensions.push({type:tool,p1:pending,p2:p,value:null});pending=null;save();refreshStatus();draw();
+      if(!active||(tool!=='width'&&tool!=='height'))return;
+      e.preventDefault();e.stopPropagation();
+      const p=pointFromEvent(e);
+      const rec={x:Math.max(0,Math.min(1,p.x)),y:Math.max(0,Math.min(1,p.y)),value:null};
+      if(tool==='width')widths.push(rec);else heights.push(rec);
+      save();renderEntryRows();updateStatus();drawOverlay();
     });
 
-    window.addEventListener('resize',resizeOverlay);const ro=new ResizeObserver(()=>resizeOverlay());ro.observe(drawingCanvas);setTimeout(resizeOverlay,100);
+    document.querySelectorAll('input[name="measureDirection"]').forEach(r=>r.addEventListener('change',drawOverlay));
+    window.addEventListener('resize',resizeOverlay);
+    const ro=new ResizeObserver(()=>resizeOverlay());ro.observe(drawingCanvas);
+    setTimeout(resizeOverlay,100);
   }
 
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
