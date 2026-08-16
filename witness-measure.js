@@ -1,5 +1,5 @@
 (() => {
-  const BUILD='ALPHA 6.0.22 · UPDATE 021';
+  const BUILD='ALPHA 6.0.22 · UPDATE 022';
   const start=()=>{
     const proof=document.querySelector('.alpha-proof');if(proof)proof.textContent=BUILD;
     const brand=document.querySelector('.brand p');if(brand)brand.textContent=BUILD+' · Locked Detection + Dimension Engine V2';
@@ -14,19 +14,76 @@
     document.querySelector('.witness-measure-overlay')?.remove();
     controls.querySelector('[data-witness-tool]')?.remove();
 
-    const manual=controls.querySelector('[data-edge-mode="manual"]');
+    const baseOverlay=document.querySelector('.edge-manual-overlay');
+    const tools=controls.querySelector('.edge-manual-tools');
+    const edgeStatus=controls.querySelector('.edge-manual-status');
+    const oldAuto=controls.querySelector('[data-edge-mode="auto"]');
+    const oldManual=controls.querySelector('[data-edge-mode="manual"]');
+
+    // UPDATE 022: remove the old Auto handler that only reloaded the page.
+    // The original Dimension Engine V2 already exposes its automatic renderer
+    // through the measure-direction change listener. Trigger that renderer instead.
+    let autoButton=oldAuto;
+    if(oldAuto){
+      autoButton=oldAuto.cloneNode(true);
+      oldAuto.replaceWith(autoButton);
+    }
+    let manualButton=oldManual;
+    if(oldManual){
+      manualButton=oldManual.cloneNode(true);
+      oldManual.replaceWith(manualButton);
+    }
+
+    const productionGrid=document.querySelector('.production-grid');
+    const widthHost=document.getElementById('measurementSequence');
+    const heightHost=document.getElementById('heightMeasurementSequence');
+    const drawingStatus=document.getElementById('drawingStatus');
+    const hasDrawing=()=>!!drawingStatus&&!/No drawing generated yet/i.test(drawingStatus.textContent||'');
+
+    const renderOriginalAuto=()=>{
+      document.body.classList.remove('manual-keyboard-open');
+      productionGrid?.classList.remove('manual-mode-hidden');
+      if(baseOverlay){baseOverlay.hidden=true;baseOverlay.style.pointerEvents='none';baseOverlay.style.opacity='0';}
+      document.querySelector('.height-layout-overlay')?.style.setProperty('display','none');
+      tools?.setAttribute('hidden','');
+      if(edgeStatus)edgeStatus.hidden=true;
+      autoButton?.classList.add('active');
+      manualButton?.classList.remove('active');
+
+      // Core SplashCAD listens to this change and calls both
+      // renderMeasurementSequence() and renderHeightMeasurementSequence().
+      const selected=document.querySelector('input[name="measureDirection"]:checked')||document.querySelector('input[name="measureDirection"]');
+      if(selected) selected.dispatchEvent(new Event('change',{bubbles:true}));
+
+      // If a drawing exists, regenerate it once so automatic dimensions and rows
+      // are fully synchronized with the current edited geometry.
+      if(hasDrawing()) document.getElementById('generateButton')?.click();
+      setTimeout(()=>{
+        const selectedAgain=document.querySelector('input[name="measureDirection"]:checked')||document.querySelector('input[name="measureDirection"]');
+        if(selectedAgain)selectedAgain.dispatchEvent(new Event('change',{bubbles:true}));
+      },80);
+    };
+
+    const enableManual=()=>{
+      tools?.removeAttribute('hidden');
+      if(edgeStatus)edgeStatus.hidden=false;
+      if(baseOverlay){baseOverlay.hidden=false;baseOverlay.style.pointerEvents='';baseOverlay.style.opacity='';}
+      autoButton?.classList.remove('active');
+      manualButton?.classList.add('active');
+      if(hasDrawing()){
+        const card=drawing.closest('.drawing-card')||drawing.parentElement;
+        setTimeout(()=>scroller?.scrollTo({top:Math.max(0,card.offsetTop-6),behavior:'smooth'}),40);
+      }
+    };
+
+    autoButton?.addEventListener('click',renderOriginalAuto);
+    manualButton?.addEventListener('click',enableManual);
+
     const heightButton=controls.querySelector('[data-edge-tool="height"]');
     const widthButton=controls.querySelector('[data-edge-tool="width"]');
     const enterButton=controls.querySelector('[data-edge-tool="enter"]');
-    const status=document.getElementById('drawingStatus');
-    const hasDrawing=()=>!!status&&!/No drawing generated yet/i.test(status.textContent||'');
 
     if(scroller)scroller.scrollTop=0;
-    manual?.addEventListener('click',()=>{
-      if(!hasDrawing())return;
-      const card=drawing.closest('.drawing-card')||drawing.parentElement;
-      setTimeout(()=>scroller?.scrollTo({top:Math.max(0,card.offsetTop-6),behavior:'smooth'}),40);
-    });
 
     const wrap=drawing.parentElement;
     if(getComputedStyle(wrap).position==='static')wrap.style.position='relative';
@@ -97,45 +154,28 @@
       const leftX=Math.min(...vrs.map(v=>v.x));
       const rightX=Math.max(...vrs.map(v=>v.x));
       const bottomY=Math.max(...hrs.map(h=>h.y));
-
-      // Main shoulder/ledge: longest horizontal line in the middle of the shape.
       const candidates=hrs.filter(h=>h.y>.28&&h.y<bottomY-.04);
       const shoulder=(candidates.length?candidates:hrs).sort((a,b)=>(b.x2-b.x1)-(a.x2-a.x1))[0];
-
-      // Left lower glass edge: horizontal edge ending before the inner/right panel.
       const leftLower=hrs.filter(h=>h.y>shoulder.y+.03&&h.y<bottomY-.02&&h.x1<=leftX+.035).sort((a,b)=>b.y-a.y)[0]||shoulder;
-
-      // Inner vertical edge: the vertical edge nearest the start of the lower/right panel.
       const innerCandidates=vrs.filter(v=>v.x>leftX+.08&&v.x<rightX-.08&&v.y2<bottomY+.025).sort((a,b)=>Math.abs(a.x-shoulder.x2)-Math.abs(b.x-shoulder.x2));
       const inner=innerCandidates[0]||vrs.filter(v=>v.x>leftX+.08&&v.x<rightX-.08).sort((a,b)=>a.x-b.x)[0];
-
       const bottomPanel=hrs.filter(h=>Math.abs(h.y-bottomY)<.018).sort((a,b)=>(b.x2-b.x1)-(a.x2-a.x1))[0];
       const datumY=Math.min(.92,bottomY+.09);
 
       c.strokeStyle='#c55';c.lineWidth=1.35*d;c.setLineDash([8*d,7*d]);
       const X=n=>n*overlay.width,Y=n=>n*overlay.height;
-
-      // 1) Left vertical witness = continuation of the actual left edge down to the datum.
       line(c,X(leftX),Y(leftLower.y),X(leftX),Y(datumY));
-
-      // 2) Inner vertical witness = continuation of the actual inner edge down to the datum.
       if(inner)line(c,X(inner.x),Y(inner.y2),X(inner.x),Y(datumY));
-
-      // 3) Bottom witness only across the empty space between those two continued edges.
       const bottomEnd=inner?inner.x:(bottomPanel?bottomPanel.x1:rightX);
       line(c,X(leftX),Y(datumY),X(bottomEnd),Y(datumY));
-
-      // 4) Horizontal witness at the shoulder level: extend the real shoulder edge through empty space only.
-      //    Do not draw over the real glass line itself.
       if(shoulder){
         if(shoulder.x1>leftX+.015)line(c,X(leftX),Y(shoulder.y),X(shoulder.x1),Y(shoulder.y));
         if(shoulder.x2<rightX-.015)line(c,X(shoulder.x2),Y(shoulder.y),X(rightX),Y(shoulder.y));
       }
-
       c.setLineDash([]);
     };
 
-    const show=()=>{if(!hasDrawing())return;overlay.style.display='block';resize();};
+    const show=()=>{if(!hasDrawing()||autoButton?.classList.contains('active'))return;overlay.style.display='block';resize();};
     const hide=()=>{overlay.style.display='none';render();};
     heightButton?.addEventListener('click',()=>setTimeout(show,0));
     widthButton?.addEventListener('click',hide);
@@ -143,7 +183,7 @@
 
     new ResizeObserver(resize).observe(drawing);
     window.addEventListener('resize',resize);
-    if(status)new MutationObserver(()=>{if(overlay.style.display!=='none')setTimeout(resize,0);}).observe(status,{childList:true,characterData:true,subtree:true});
+    if(drawingStatus)new MutationObserver(()=>{if(overlay.style.display!=='none')setTimeout(resize,0);}).observe(drawingStatus,{childList:true,characterData:true,subtree:true});
     setTimeout(resize,150);
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,260));else setTimeout(start,260);
