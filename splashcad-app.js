@@ -1326,23 +1326,45 @@ setStatus(
   };
 
   const perimeterWithSurveyNotches = (vertices) => {
-    if(!Array.isArray(vertices) || vertices.length<3) return vertices||[];
-    if(!(state.notches||[]).length) return vertices.map(v=>({...v}));
+    if(!Array.isArray(vertices)||vertices.length<3){
+      return vertices||[];
+    }
 
-    let perimeter=vertices.map(v=>({...v}));
+    if(!(state.notches||[]).length){
+      return vertices.map(p=>({...p}));
+    }
 
-    // Before exact site measurements are entered, use a small nominal notch
-    // purely to preserve the topology the surveyor created on the photograph.
-    const boundsX=vertices.map(v=>v.x);
-    const boundsY=vertices.map(v=>v.y);
-    const spanX=Math.max(...boundsX)-Math.min(...boundsX);
-    const spanY=Math.max(...boundsY)-Math.min(...boundsY);
-    const nominalWidth=Math.max(8,Math.min(spanX*0.018,28));
-    const nominalDepth=Math.max(8,Math.min(spanY*0.10,22));
+    let perimeter=vertices.map(p=>({...p}));
 
-    measurementNotchEntries().forEach(({notch,index:notchIndex})=>{
-      const n=scaledNotch(notch);
-      if(!n || !Number.isFinite(n.x) || !Number.isFinite(n.y)) return;
+    measurementNotchEntries().forEach(entry=>{
+      const notch=scaledNotch(entry.notch);
+
+      if(
+        !notch ||
+        !Number.isFinite(notch.x) ||
+        !Number.isFinite(notch.y)
+      ) return;
+
+      const orientation=notchMeasurementOrientation(entry);
+
+      const xs=perimeter.map(p=>Number(p.x));
+      const ys=perimeter.map(p=>Number(p.y));
+
+      const spanX=Math.max(...xs)-Math.min(...xs);
+      const spanY=Math.max(...ys)-Math.min(...ys);
+
+      const opening=Math.max(
+        10,
+        Math.min(Math.max(spanX,spanY)*0.035,28)
+      );
+
+      const depth=Math.max(
+        10,
+        Math.min(Math.max(spanX,spanY)*0.04,30)
+      );
+
+      const centreX=xs.reduce((a,b)=>a+b,0)/xs.length;
+      const centreY=ys.reduce((a,b)=>a+b,0)/ys.length;
 
       let best=-1;
       let bestDistance=Infinity;
@@ -1351,17 +1373,48 @@ setStatus(
         const a=perimeter[i];
         const b=perimeter[(i+1)%perimeter.length];
 
-        const horizontal=Math.abs(a.y-b.y)<=Math.max(1,Math.abs(a.x-b.x)*0.04);
-        if(!horizontal) continue;
+        const dx=Number(b.x)-Number(a.x);
+        const dy=Number(b.y)-Number(a.y);
 
-        const lo=Math.min(a.x,b.x);
-        const hi=Math.max(a.x,b.x);
+        const horizontal=
+          Math.abs(dx)>Math.abs(dy)*2;
 
-        if(n.x<lo-nominalWidth || n.x>hi+nominalWidth) continue;
+        const vertical=
+          Math.abs(dy)>Math.abs(dx)*2;
 
-        const distance=Math.abs(n.y-(a.y+b.y)/2);
-        if(distance<bestDistance){
-          bestDistance=distance;
+        if(
+          orientation==="vertical" &&
+          !horizontal
+        ) continue;
+
+        if(
+          orientation==="horizontal" &&
+          !vertical
+        ) continue;
+
+        const len2=dx*dx+dy*dy||1;
+
+        const t=Math.max(
+          0,
+          Math.min(
+            1,
+            (
+              (notch.x-Number(a.x))*dx +
+              (notch.y-Number(a.y))*dy
+            )/len2
+          )
+        );
+
+        const px=Number(a.x)+(t*dx);
+        const py=Number(a.y)+(t*dy);
+
+        const d=Math.hypot(
+          notch.x-px,
+          notch.y-py
+        );
+
+        if(d<bestDistance){
+          bestDistance=d;
           best=i;
         }
       }
@@ -1370,44 +1423,97 @@ setStatus(
 
       const a=perimeter[best];
       const b=perimeter[(best+1)%perimeter.length];
-      const y=(a.y+b.y)/2;
 
-      // Only cut an upper/top run. Bottom datum edges must never acquire a notch.
-      const bottomY=Math.min(...perimeter.map(v=>v.y));
-      if(Math.abs(y-bottomY)<Math.max(2,spanY*0.04)) return;
+      let bite=[];
 
-      const half=nominalWidth/2;
-      const left=Math.max(Math.min(a.x,b.x)+1,n.x-half);
-      const right=Math.min(Math.max(a.x,b.x)-1,n.x+half);
-      if(!(right>left)) return;
+      /* HORIZONTAL NOTCH — sideways rectangular bite */
+      if(orientation==="horizontal"){
+        const edgeX=(Number(a.x)+Number(b.x))/2;
 
-      // Drawing coordinates use positive Y upwards, therefore a notch into the
-      // glass drops DOWN from the top edge.
-      const notchBottom=y-nominalDepth;
+        const lo=Math.min(Number(a.y),Number(b.y));
+        const hi=Math.max(Number(a.y),Number(b.y));
 
-      const injected=a.x<=b.x
-        ? [
-            {x:left,y},
-            {x:left,y:notchBottom},
-            {x:right,y:notchBottom},
-            {x:right,y}
-          ]
-        : [
-            {x:right,y},
-            {x:right,y:notchBottom},
-            {x:left,y:notchBottom},
-            {x:left,y}
+        let y1=Math.max(
+          lo+1,
+          Math.min(
+            hi-opening-1,
+            notch.y-opening/2
+          )
+        );
+
+        const y2=y1+opening;
+
+        const inward=
+          centreX>=edgeX ? 1 : -1;
+
+        const innerX=edgeX+(inward*depth);
+
+        if(Number(a.y)<=Number(b.y)){
+          bite=[
+            {x:edgeX,y:y1},
+            {x:innerX,y:y1},
+            {x:innerX,y:y2},
+            {x:edgeX,y:y2}
           ];
+        }else{
+          bite=[
+            {x:edgeX,y:y2},
+            {x:innerX,y:y2},
+            {x:innerX,y:y1},
+            {x:edgeX,y:y1}
+          ];
+        }
+      }
+
+      /* VERTICAL NOTCH — normal rectangular bite */
+      else{
+        const edgeY=(Number(a.y)+Number(b.y))/2;
+
+        const lo=Math.min(Number(a.x),Number(b.x));
+        const hi=Math.max(Number(a.x),Number(b.x));
+
+        let x1=Math.max(
+          lo+1,
+          Math.min(
+            hi-opening-1,
+            notch.x-opening/2
+          )
+        );
+
+        const x2=x1+opening;
+
+        const inward=
+          centreY>=edgeY ? 1 : -1;
+
+        const innerY=edgeY+(inward*depth);
+
+        if(Number(a.x)<=Number(b.x)){
+          bite=[
+            {x:x1,y:edgeY},
+            {x:x1,y:innerY},
+            {x:x2,y:innerY},
+            {x:x2,y:edgeY}
+          ];
+        }else{
+          bite=[
+            {x:x2,y:edgeY},
+            {x:x2,y:innerY},
+            {x:x1,y:innerY},
+            {x:x1,y:edgeY}
+          ];
+        }
+      }
 
       perimeter=[
         ...perimeter.slice(0,best+1),
-        ...injected,
+        ...bite,
         ...perimeter.slice(best+1)
       ];
     });
 
     return perimeter;
   };
+
 
   const exportDxf = () => {
     // The approved scan is the immutable drawing geometry. Measurements annotate
@@ -1850,7 +1956,94 @@ setStatus(
       raw.splice(at,0,feature);
     });
 
-    return raw.map((f,i)=>({...f,seq:i+1,key:widthFeatureKey(f)}));
+    // FINAL GEOMETRY PASS:
+    // Never lose a genuine internal vertical transition.
+    {
+      const outline=state.points||[];
+
+      if(outline.length>=3){
+        const allX=outline
+          .map(p=>Number(p.x))
+          .filter(Number.isFinite);
+
+        if(allX.length){
+          const minX=Math.min(...allX);
+          const maxX=Math.max(...allX);
+          const edgeTol=Math.max(5,(maxX-minX)*0.012);
+
+          const geometryWidths=[];
+
+          for(let i=0;i<outline.length;i++){
+            const a=outline[i];
+            const b=outline[(i+1)%outline.length];
+
+            const ax=Number(a.x);
+            const ay=Number(a.y);
+            const bx=Number(b.x);
+            const by=Number(b.y);
+
+            if(
+              !Number.isFinite(ax) ||
+              !Number.isFinite(ay) ||
+              !Number.isFinite(bx) ||
+              !Number.isFinite(by)
+            ) continue;
+
+            const dx=Math.abs(bx-ax);
+            const dy=Math.abs(by-ay);
+
+            // Genuine vertical edge.
+            if(!(dy>8 && dx<=Math.max(4,dy*0.16))) continue;
+
+            const x=(ax+bx)/2;
+
+            // Overall left/right sides are covered by Overall Width.
+            if(
+              Math.abs(x-minX)<=edgeTol ||
+              Math.abs(x-maxX)<=edgeTol
+            ) continue;
+
+            // Deduplicate only other OUTLINE transitions.
+            // A notch station near the same X is allowed to remain separate.
+            if(
+              geometryWidths.some(g=>Math.abs(Number(g.x)-x)<4)
+            ) continue;
+
+            geometryWidths.push({
+              type:"outline-x",
+              segmentIndex:i,
+              x
+            });
+          }
+
+          geometryWidths.forEach(feature=>{
+            const alreadyThere=raw.some(existing=>
+              existing.type==="outline-x" &&
+              Math.abs(Number(existing.x)-Number(feature.x))<4
+            );
+
+            if(!alreadyThere){
+              raw.push(feature);
+            }
+          });
+        }
+      }
+    }
+
+    raw.sort((a,b)=>{
+      const ax=Number(a.x);
+      const bx=Number(b.x);
+
+      return state.measurementDirection==="rtl"
+        ? bx-ax
+        : ax-bx;
+    });
+
+    return raw.map((f,i)=>({
+      ...f,
+      seq:i+1,
+      key:widthFeatureKey(f)
+    }));
   };
 
   const heightMeasurementFeatureMap = () => {
@@ -2904,7 +3097,11 @@ setStatus(
     // What the surveyor sees and edits in cyan is EXACTLY what the measured
     // drawing uses. Measurements annotate this geometry; they never rebuild it.
     const scannedVertices = scaledPoints();
-    const vertices = scannedVertices.map(point=>({...point}));
+
+    // Exact edited cyan geometry remains the master.
+    // Survey notches are now inserted as genuine perimeter bites.
+    const vertices = perimeterWithSurveyNotches(scannedVertices);
+
     const usingMeasuredProductionPerimeter = false;
 
     if (vertices.length < 3) {
