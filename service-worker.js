@@ -1,8 +1,8 @@
-const CACHE='splashcad-6-0-22-u027-canonical-auto-recovery-20260817183500';
+const CACHE='splashcad-6-0-22-u028-durable-photo-import-20260817185000';
 const CORE=['/','/index.html','/hob.html','/window.html','/styles.css','/splashcad-app.js','/window-wall.js','/voice.js','/tablet.js','/manifest.webmanifest','/splashcad-icon.svg'];
 const TABLET_PATCH=`
 ;(()=>{
-  const BUILD='ALPHA 6.0.22 · UPDATE 027';
+  const BUILD='ALPHA 6.0.22 · UPDATE 028';
   document.title='SplashCAD — '+BUILD;
   const proof=document.querySelector('.alpha-proof'); if(proof) proof.textContent=BUILD;
   const brand=document.querySelector('.brand p'); if(brand) brand.textContent=BUILD+' · Locked Detection + Dimension Engine V2';
@@ -26,8 +26,29 @@ const patchSplashcadApp=(source)=>{
   source=source.replaceAll('const measuredH=Number(socket.editHeight)>0?Number(socket.editHeight):spec.height;','const measuredH=fittingFaceplateSize(socket).height;');
   source=source.replaceAll('const measuredW = Number(socket.editWidth) > 0 ? Number(socket.editWidth) : spec.width;','const measuredW = fittingFaceplateSize(socket).width;');
   source=source.replaceAll('const measuredH = Number(socket.editHeight) > 0 ? Number(socket.editHeight) : spec.height;','const measuredH = fittingFaceplateSize(socket).height;');
+
+  // UPDATE 028: Android photo-picker references can lose permission after the
+  // change event. Copy the selected file ONCE into app-owned bytes, then use
+  // only that stable Blob/File for format checks, HEIC conversion and DataURL save.
+  source=source.replace(
+    '  const loadPhotoFile = async (file) => {\n    if (!file) return;\n    try {\n      const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());',
+    '  const loadPhotoFile = async (file) => {\n    if (!file) return;\n    try {\n      const ownedBytes = await file.arrayBuffer();\n      const ownedFile = new File([ownedBytes], file.name || "splashcad-photo", { type: file.type || "application/octet-stream", lastModified: Date.now() });\n      const header = new Uint8Array(ownedBytes.slice(0, 16));'
+  );
+  source=source.replaceAll('fileToDataUrl(new Blob([file], { type: "image/jpeg" }))','fileToDataUrl(new Blob([ownedFile], { type: "image/jpeg" }))');
+  source=source.replaceAll('fileToDataUrl(new Blob([file], { type: "image/png" }))','fileToDataUrl(new Blob([ownedFile], { type: "image/png" }))');
+  source=source.replaceAll('fileToDataUrl(file)','fileToDataUrl(ownedFile)');
+  source=source.replaceAll('isHeicFile(file)','isHeicFile(ownedFile)');
+  source=source.replaceAll('blob: file','blob: ownedFile');
+  source=source.replace(
+    '  $("libraryInput").addEventListener("change", (event) => {\n    loadPhotoFile(event.target.files?.[0]);\n  });',
+    '  $("libraryInput").addEventListener("change", (event) => {\n    const selected=event.target.files?.[0];\n    loadPhotoFile(selected).finally(()=>{ event.target.value=""; });\n  });'
+  );
+  source=source.replace(
+    '  $("cameraInput").addEventListener("change", (event) => {\n    loadPhotoFile(event.target.files?.[0]);\n  });',
+    '  $("cameraInput").addEventListener("change", (event) => {\n    const selected=event.target.files?.[0];\n    loadPhotoFile(selected).finally(()=>{ event.target.value=""; });\n  });'
+  );
   return source;
 };
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;const url=new URL(event.request.url);if(url.pathname==='/tablet.js'){event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 027')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));return;}if(url.pathname==='/splashcad-app.js'){event.respondWith(fetch(event.request).then(async response=>{const text=patchSplashcadApp(await response.text());const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));return;}event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));});
+self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;const url=new URL(event.request.url);if(url.pathname==='/tablet.js'){event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 028')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));return;}if(url.pathname==='/splashcad-app.js'){event.respondWith(fetch(event.request).then(async response=>{const text=patchSplashcadApp(await response.text());const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));return;}event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));});
