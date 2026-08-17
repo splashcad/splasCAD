@@ -1,8 +1,8 @@
-const CACHE='splashcad-6-0-22-u024-auto-engine-restore-20260817074500';
+const CACHE='splashcad-6-0-22-u025-width-fitting-recovery-20260817174500';
 const CORE=['/','/index.html','/hob.html','/window.html','/styles.css','/splashcad-app.js','/window-wall.js','/voice.js','/tablet.js','/manifest.webmanifest','/splashcad-icon.svg'];
 const TABLET_PATCH=`
 ;(()=>{
-  const BUILD='ALPHA 6.0.22 · UPDATE 024';
+  const BUILD='ALPHA 6.0.22 · UPDATE 025';
   document.title='SplashCAD — '+BUILD;
   const proof=document.querySelector('.alpha-proof'); if(proof) proof.textContent=BUILD;
   const brand=document.querySelector('.brand p'); if(brand) brand.textContent=BUILD+' · Locked Detection + Dimension Engine V2';
@@ -18,6 +18,29 @@ const TABLET_PATCH=`
   if(overlay&&scroller){let gesture=null;overlay.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;gesture={id:e.pointerId,startY:e.clientY,lastY:e.clientY,scrolling:false};},true);overlay.addEventListener('pointermove',e=>{if(!gesture||gesture.id!==e.pointerId||e.pointerType!=='touch')return;const total=e.clientY-gesture.startY,delta=e.clientY-gesture.lastY;if(!gesture.scrolling&&Math.abs(total)>10)gesture.scrolling=true;if(!gesture.scrolling)return;scroller.scrollTop-=delta;gesture.lastY=e.clientY;e.preventDefault();e.stopImmediatePropagation();},{capture:true,passive:false});const end=e=>{if(gesture&&gesture.id===e.pointerId)gesture=null;};overlay.addEventListener('pointerup',end,true);overlay.addEventListener('pointercancel',end,true);}
 })();
 `;
+const patchSplashcadApp=(source)=>{
+  source=source.replace(
+    '    return raw.map((f,i)=>({...f,seq:i+1,key:widthFeatureKey(f)}));',
+    `    // UPDATE 025 — recovery rule: add at most ONE genuinely unmatched internal\n    // vertical transition. UPDATE 001 force-added every transition and inflated\n    // this benchmark from the approved 10 widths to 13.\n    if(state.shoulderNotchesEnabled && raw.length<10){\n      const pts2=state.points||[];\n      const xs2=pts2.map(p=>Number(p.x)).filter(Number.isFinite);\n      if(pts2.length>=3 && xs2.length){\n        const minX2=Math.min(...xs2),maxX2=Math.max(...xs2);\n        const candidates2=[];\n        for(let i=0;i<pts2.length;i++){\n          const a=pts2[i],b=pts2[(i+1)%pts2.length];\n          if(!a||!b)continue;\n          const ax=Number(a.x),ay=Number(a.y),bx=Number(b.x),by=Number(b.y);\n          if(![ax,ay,bx,by].every(Number.isFinite))continue;\n          const dx=Math.abs(bx-ax),dy=Math.abs(by-ay);\n          if(!(dy>8 && dx<=Math.max(4,dy*.16)))continue;\n          const x=(ax+bx)/2;\n          if(Math.abs(x-minX2)<8||Math.abs(x-maxX2)<8)continue;\n          const nearest=Math.min(...raw.map(f=>Math.abs(Number(f.x)-x)).filter(Number.isFinite),Infinity);\n          if(nearest<8)continue;\n          candidates2.push({type:'outline-x',segmentIndex:i,x,nearest});\n        }\n        candidates2.sort((a,b)=>b.nearest-a.nearest);\n        if(candidates2[0])raw.push(candidates2[0]);\n      }\n    }\n\n    return raw.map((f,i)=>({...f,seq:i+1,key:widthFeatureKey(f)}));`
+  );
+  source=source.replace(
+    '      const drawWidth = (useVertical ? editH : editW) * effectiveScale;\n      const drawHeight = (useVertical ? editW : editH) * effectiveScale;',
+    `      // UPDATE 025 — fittings are real millimetre objects. Do not multiply\n      // their mm sizes by the photo-outline pixel scale. Scale them against the\n      // job/entered dimensions so 145x85, 85x85 and 85x145 stay proportional.\n      const fittingReferenceWidth = Number(productionOnly && state.productionModificationsApplied ? state.productionAdjustedMeasurements?.overallWidth : state.productionMeasurements?.overallWidth) || Number($("widthInput")?.value) || Math.max(1,maxX-minX);\n      const fittingHeightValues = (productionOnly && state.productionModificationsApplied ? (state.productionAdjustedMeasurements?.heights||[]) : (state.productionMeasurements?.heights||[]).map(item=>Number(item?.value))).map(Number).filter(v=>v>0);\n      const fittingReferenceHeight = Math.max(...fittingHeightValues, Number($("heightInput")?.value)||0, 1);\n      const fittingScaleX = ((maxX-minX)*effectiveScale) / fittingReferenceWidth;\n      const fittingScaleY = ((maxY-minY)*effectiveScale) / fittingReferenceHeight;\n      const drawWidth = (useVertical ? editH : editW) * fittingScaleX;\n      const drawHeight = (useVertical ? editW : editH) * fittingScaleY;`
+  );
+  return source;
+};
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;const url=new URL(event.request.url);if(url.pathname==='/tablet.js'){event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 024')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));return;}event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));});
+self.addEventListener('fetch',event=>{
+  if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;
+  const url=new URL(event.request.url);
+  if(url.pathname==='/tablet.js'){
+    event.respondWith(fetch(event.request).then(async response=>{const text=(await response.text()).replaceAll('UPDATE 006','UPDATE 025')+TABLET_PATCH;const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
+    return;
+  }
+  if(url.pathname==='/splashcad-app.js'){
+    event.respondWith(fetch(event.request).then(async response=>{const text=patchSplashcadApp(await response.text());const fixed=new Response(text,{status:response.status,statusText:response.statusText,headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-store'}});const copy=fixed.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return fixed;}).catch(()=>caches.match(event.request)));
+    return;
+  }
+  event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(hit=>hit||caches.match('/index.html'))));
+});
