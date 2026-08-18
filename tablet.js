@@ -20,6 +20,38 @@
   const libraryInput=document.getElementById('libraryInput');
   const cameraInput=document.getElementById('cameraInput');
   const oneClickDetectButton=document.getElementById('oneClickDetectButton');
+
+  // Recovery-only hardening. Keep live Hob Wall / Window Wall behaviour unchanged.
+  const recoveryPage=/TEST\s*\/\s*RECOVERY/i.test(document.title) || /RECOVERY\s+R00/i.test(document.body?.innerText||'');
+  if(recoveryPage){
+    document.title='TEST / RECOVERY R003 · SplashCAD';
+    const banner=document.querySelector('body > div[style*="position:sticky"]');
+    if(banner) banner.textContent='TEST / RECOVERY · BUILD R003 · 18 AUG · FORCED JPEG CAMERA · SEPARATE FROM LIVE HOB WALL';
+    const proof=document.querySelector('.alpha-proof');
+    if(proof) proof.textContent='RECOVERY R003 · ALPHA 6.0.21';
+    const brandSub=document.querySelector('.brand p');
+    if(brandSub) brandSub.textContent='RECOVERY R003 · ALPHA 6.0.21 · Locked Detection + Dimension Engine V2';
+
+    if(libraryInput) libraryInput.accept='image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+    if(cameraInput) cameraInput.accept='image/jpeg';
+
+    // The old sidebar Take photo label directly opened Android's file camera and
+    // could return HEIC before our JPEG handler ran. Hide that direct route and
+    // replace it with a button that calls the same browser JPEG camera as the
+    // tablet toolbar.
+    const directCameraLabel=cameraInput?.closest('label.file-button');
+    if(directCameraLabel){
+      directCameraLabel.style.display='none';
+      const safeButton=document.createElement('button');
+      safeButton.type='button';
+      safeButton.className='full';
+      safeButton.textContent='Take photo · JPEG';
+      safeButton.setAttribute('data-recovery-jpeg-camera','1');
+      directCameraLabel.insertAdjacentElement('afterend',safeButton);
+      safeButton.addEventListener('click',()=>tabletTakePhotoButton?.click());
+    }
+  }
+
   if(tabletChoosePhotoButton){
     tabletChoosePhotoButton.addEventListener('click',()=>{
       (libraryInput||cameraInput)?.click();
@@ -100,7 +132,7 @@
             // Fallback for browsers that do not allow assigning FileList.
             const reader=new FileReader();
             reader.onload=()=>{
-              const photo=document.getElementById('photo');
+              const photo=document.getElementById('wallPhoto');
               if(photo) photo.src=String(reader.result||'');
             };
             reader.readAsDataURL(file);
