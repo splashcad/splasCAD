@@ -1,8 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
+    "api/index.js": {
+      "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg}"
+    },
     "api/[...path].js": {
       "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg}"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/api/index?recoveryPath=index.html" },
+    { "source": "/hob.html", "destination": "/api/index?recoveryPath=hob.html" },
+    { "source": "/window.html", "destination": "/api/index?recoveryPath=window.html" },
+    { "source": "/splashcad-app.js", "destination": "/api/index?recoveryPath=splashcad-app.js" },
+    { "source": "/window-wall.js", "destination": "/api/index?recoveryPath=window-wall.js" },
+    { "source": "/tablet.js", "destination": "/api/index?recoveryPath=tablet.js" },
+    { "source": "/voice.js", "destination": "/api/index?recoveryPath=voice.js" },
+    { "source": "/styles.css", "destination": "/api/index?recoveryPath=styles.css" },
+    { "source": "/manifest.webmanifest", "destination": "/api/index?recoveryPath=manifest.webmanifest" },
+    { "source": "/service-worker.js", "destination": "/api/index?recoveryPath=service-worker.js" },
+    { "source": "/splashcad-icon.svg", "destination": "/api/index?recoveryPath=splashcad-icon.svg" },
+    { "source": "/benchmark.jpg", "destination": "/api/index?recoveryPath=benchmark.jpg" },
+    { "source": "/window-benchmark.jpg", "destination": "/api/index?recoveryPath=window-benchmark.jpg" }
+  ]
 }
