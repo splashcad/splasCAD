@@ -2,10 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg}"
+      "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg,heic-to.js,heic2any.min.js}"
     },
     "api/[...path].js": {
-      "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg}"
+      "includeFiles": "{index.html,hob.html,window.html,splashcad-app.js,window-wall.js,tablet.js,voice.js,styles.css,manifest.webmanifest,service-worker.js,splashcad-icon.svg,benchmark.jpg,window-benchmark.jpg,heic-to.js,heic2any.min.js}"
     }
   },
   "rewrites": [
@@ -21,6 +21,8 @@
     { "source": "/service-worker.js", "destination": "/api/index?recoveryPath=service-worker.js" },
     { "source": "/splashcad-icon.svg", "destination": "/api/index?recoveryPath=splashcad-icon.svg" },
     { "source": "/benchmark.jpg", "destination": "/api/index?recoveryPath=benchmark.jpg" },
-    { "source": "/window-benchmark.jpg", "destination": "/api/index?recoveryPath=window-benchmark.jpg" }
+    { "source": "/window-benchmark.jpg", "destination": "/api/index?recoveryPath=window-benchmark.jpg" },
+    { "source": "/heic-to.js", "destination": "/api/index?recoveryPath=heic-to.js" },
+    { "source": "/heic2any.min.js", "destination": "/api/index?recoveryPath=heic2any.min.js" }
   ]
 }
