@@ -7,7 +7,7 @@ export default async function handler(req,res){
   if(typeof imageDataUrl!=='string'||!imageDataUrl.startsWith('data:image/')){res.status(400).json({error:'Invalid image'});return}
   const prompt=`You are detecting a glass splashback from a survey photo. Return JSON only with shape {"outline":[{"x":0..1,"y":0..1}],"fittings":[{"x":0..1,"y":0..1,"code":"S/S|D/S|C/S|M/S","w":0..1,"h":0..1}],"notches":[{"x":0..1,"y":0..1}]}. Outline points must trace only the intended glass perimeter in clockwise order. Detect visible electrical faceplates simultaneously. Ignore handles, appliance details, reflections, shadows and internal socket details. Prefer fewer accurate perimeter points over noisy points. Keep coordinates normalized to the image.`;
   try{
-    const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_VISION_MODEL||'gpt-5.6',input:[{role:'user',content:[{type:'input_text',text:prompt},{type:'input_image',image_url:imageDataUrl}]}],text:{format:{type:'json_object'}}})});
+    const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_VISION_MODEL||'gpt-5.4-mini',input:[{role:'user',content:[{type:'input_text',text:prompt},{type:'input_image',image_url:imageDataUrl}]}],text:{format:{type:'json_object'}}})});
     const data=await r.json();
     if(!r.ok)throw new Error(data?.error?.message||`OpenAI ${r.status}`);
     let text=data.output_text||'';
