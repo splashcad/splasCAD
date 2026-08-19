@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07110f">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css?v=001">
+<title>SplashCAD · REBUILD 001</title>
+</head>
+<body>
+<header class="topbar">
+  <div><strong>SplashCAD</strong><span class="build">REBUILD 001 · CLEAN CODEBASE</span></div>
+  <div class="top-actions"><button id="undoBtn">Undo</button><button id="resetBtn" class="danger">Reset job</button></div>
+</header>
+<main class="app">
+<section class="left panel">
+  <h2>1 · Job</h2>
+  <label>Customer<input id="customer" autocomplete="off"></label>
+  <label>Piece<input id="piece" autocomplete="off" value="Splashback"></label>
+  <div class="row"><label>Overall width mm<input id="overallW" inputmode="decimal"></label><label>Overall height mm<input id="overallH" inputmode="decimal"></label></div>
+  <div class="row"><label class="file primary">Choose photo<input id="photoInput" type="file" accept="image/*,.heic,.heif"></label><label class="file">Take photo<input id="cameraInput" type="file" accept="image/jpeg" capture="environment"></label></div>
+  <button id="scanBtn" class="primary full">Scan outline + fittings</button>
+  <div id="scanStatus" class="status">Load a photo.</div>
+
+  <h2>2 · Edit</h2>
+  <div class="tools">
+    <button data-mode="move" class="active">Select / move</button>
+    <button data-mode="outline">Add outline point</button>
+    <button data-mode="single">Single socket</button>
+    <button data-mode="double">Double socket</button>
+    <button data-mode="cooker">Cooker switch</button>
+    <button data-mode="notch">Add notch</button>
+    <button data-mode="hole">Add hole</button>
+    <button data-mode="radius">Corner radius</button>
+    <button data-mode="erase">Erase</button>
+  </div>
+  <div class="row"><label>Direction<select id="direction"><option value="ltr">Left → Right</option><option value="rtl">Right → Left</option></select></label><button id="voiceBtn">🎤 Voice entry</button></div>
+</section>
+
+<section class="centre">
+  <section class="card">
+    <div class="heading"><h2>Photo survey</h2><span id="modeBadge">Select / move</span></div>
+    <div id="stage" class="stage"><img id="photo" alt="Survey photo"><canvas id="overlay"></canvas></div>
+    <p class="hint">Blue = outline · Red = fittings · Orange = notches · Drag to correct.</p>
+  </section>
+  <section class="card">
+    <div class="heading"><h2>Measured drawing</h2><button id="printBtn">Print / PDF</button></div>
+    <canvas id="drawing" width="1400" height="900"></canvas>
+  </section>
+  <section class="card">
+    <div class="heading"><h2>Production drawing</h2><span>allowances applied</span></div>
+    <canvas id="production" width="1400" height="900"></canvas>
+  </section>
+</section>
+
+<section class="right panel">
+  <h2>3 · Measurements</h2>
+  <p class="hint">Widths first, then heights. Enter moves to next field.</p>
+  <div id="widthFields"></div>
+  <label>Overall width<input id="mOverallW" inputmode="decimal"></label>
+  <div id="heightFields"></div>
+  <div class="row"><label>Left overall H<input id="leftH" inputmode="decimal"></label><label>Right overall H<input id="rightH" inputmode="decimal"></label></div>
+  <button id="applyBtn" class="primary full">Apply measurements</button>
+
+  <h2>4 · Production</h2>
+  <label>Edge touching unit<select id="unitEdge"><option value="none">None</option><option value="left">Left (-2)</option><option value="right">Right (-2)</option><option value="both">Both (-2 each)</option></select></label>
+  <label><input id="revealAllowance" type="checkbox"> Reveal edge +7 mm</label>
+  <label><input id="overlapAllowance" type="checkbox"> Overlap edge -8 mm</label>
+  <button id="productionBtn" class="primary full">Apply production allowances</button>
+  <div id="productionSummary" class="status"></div>
+
+  <h2>5 · Job</h2>
+  <div class="row"><button id="saveBtn">Save</button><button id="exportBtn">Export JSON</button></div>
+</section>
+</main>
+<script src="/app.js?v=001" defer></script>
+</body></html>

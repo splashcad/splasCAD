@@ -1,8 +1,7 @@
-# SplashCAD — Clean Restart
+# SplashCAD — REBUILD 001
 
-This branch is intentionally clean.
+Fresh implementation. No Hob Wall, Window Wall, Update 00x, or R00x recovery code is part of this tree.
 
-The previous Hob Wall, Window Wall, and recovery R00x code are not part of this active tree.
-Git history is retained only as reference material for reconstructing proven behaviour.
+Unified survey workflow: photo/camera → AI outline + fittings → edit geometry → measurements → production allowances → measured/production drawings → save/export.
 
-Build: RESTART 001
+Visible build: REBUILD 001.
